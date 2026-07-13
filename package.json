@@ -2,13 +2,15 @@
   "name": "db-studio",
   "displayName": "DB Studio",
   "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL)",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "farrugia",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "scripts": {
@@ -66,15 +68,43 @@
     ],
     "menus": {
       "view/title": [
-        { "command": "dbStudio.addConnection", "when": "view == dbStudio.explorer", "group": "navigation@1" },
-        { "command": "dbStudio.refresh", "when": "view == dbStudio.explorer", "group": "navigation@2" }
+        {
+          "command": "dbStudio.addConnection",
+          "when": "view == dbStudio.explorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dbStudio.refresh",
+          "when": "view == dbStudio.explorer",
+          "group": "navigation@2"
+        }
       ],
       "view/item/context": [
-        { "command": "dbStudio.runQuery", "when": "view == dbStudio.explorer && viewItem == connection", "group": "inline" },
-        { "command": "dbStudio.editConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "inline" },
-        { "command": "dbStudio.editConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "1_manage@1" },
-        { "command": "dbStudio.removeConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "1_manage@2" },
-        { "command": "dbStudio.openTableData", "when": "view == dbStudio.explorer && viewItem == table", "group": "inline" }
+        {
+          "command": "dbStudio.runQuery",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "inline"
+        },
+        {
+          "command": "dbStudio.editConnection",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "inline"
+        },
+        {
+          "command": "dbStudio.editConnection",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "1_manage@1"
+        },
+        {
+          "command": "dbStudio.removeConnection",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "1_manage@2"
+        },
+        {
+          "command": "dbStudio.openTableData",
+          "when": "view == dbStudio.explorer && viewItem == table",
+          "group": "inline"
+        }
       ]
     },
     "configuration": {
@@ -86,15 +116,39 @@
           "description": "Saved database connections (passwords are stored separately in the OS secret storage).",
           "items": {
             "type": "object",
-            "required": ["name", "driver", "host", "user"],
+            "required": [
+              "name",
+              "driver",
+              "host",
+              "user"
+            ],
             "properties": {
-              "name": { "type": "string" },
-              "driver": { "type": "string", "enum": ["mysql", "postgres"] },
-              "host": { "type": "string" },
-              "port": { "type": "number" },
-              "user": { "type": "string" },
-              "database": { "type": "string" },
-              "color": { "type": "string", "description": "Optional hex color (e.g. #4ec94e) tinting the connection in the tree." }
+              "name": {
+                "type": "string"
+              },
+              "driver": {
+                "type": "string",
+                "enum": [
+                  "mysql",
+                  "postgres"
+                ]
+              },
+              "host": {
+                "type": "string"
+              },
+              "port": {
+                "type": "number"
+              },
+              "user": {
+                "type": "string"
+              },
+              "database": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string",
+                "description": "Optional hex color (e.g. #4ec94e) tinting the connection in the tree."
+              }
             }
           }
         },
