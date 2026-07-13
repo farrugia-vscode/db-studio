@@ -42,6 +42,11 @@
         "icon": "$(add)"
       },
       {
+        "command": "dbStudio.editConnection",
+        "title": "DB Studio: Edit Connection",
+        "icon": "$(edit)"
+      },
+      {
         "command": "dbStudio.removeConnection",
         "title": "DB Studio: Remove Connection"
       },
@@ -66,7 +71,9 @@
       ],
       "view/item/context": [
         { "command": "dbStudio.runQuery", "when": "view == dbStudio.explorer && viewItem == connection", "group": "inline" },
-        { "command": "dbStudio.removeConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "1_manage" },
+        { "command": "dbStudio.editConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "inline" },
+        { "command": "dbStudio.editConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "1_manage@1" },
+        { "command": "dbStudio.removeConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "1_manage@2" },
         { "command": "dbStudio.openTableData", "when": "view == dbStudio.explorer && viewItem == table", "group": "inline" }
       ]
     },
@@ -86,7 +93,8 @@
               "host": { "type": "string" },
               "port": { "type": "number" },
               "user": { "type": "string" },
-              "database": { "type": "string" }
+              "database": { "type": "string" },
+              "color": { "type": "string", "description": "Optional hex color (e.g. #4ec94e) tinting the connection in the tree." }
             }
           }
         },

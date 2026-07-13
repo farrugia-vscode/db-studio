@@ -5,6 +5,7 @@ A lightweight, PHPStorm-style database explorer for VS Code — browse your sche
 ## Features
 
 - **Multi-connection** sidebar (MySQL / MariaDB via `mysql2`, PostgreSQL via `pg`)
+- **Connection form** (add/edit in one screen) with a **per-connection color** that tints it in the tree
 - **Schema navigation**: connection → database/schema → table → columns (PK, type, nullability)
 - **Run SQL**: from the current selection, the active `.sql` file, or a prompt — results in a grid
 - **Editable data grid**: edit cells, add and delete rows, then **Commit** — changes are applied as
@@ -54,7 +55,8 @@ Dev loop: `bun run watch` (rebuild on change) and `bun run check` (type-check).
 
 ## Usage
 
-- **DB Studio: Add Connection** — configure a MySQL/MariaDB or PostgreSQL connection
+- **DB Studio: Add Connection** — fill the form (driver, host, port, user, database, password, color)
+- Right-click a connection → **Edit Connection** (blank password keeps the stored one)
 - Expand a connection to browse its schema
 - Right-click a table → **Open Table Data** to edit, or a connection → **Run SQL Query**
 

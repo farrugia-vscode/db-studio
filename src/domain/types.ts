@@ -7,6 +7,8 @@ export interface ConnectionConfig {
   port?: number;
   user: string;
   database?: string;
+  /** Optional hex color (e.g. `#4ec94e`) used to tint the connection in the tree. */
+  color?: string;
 }
 
 export interface ColumnMeta {

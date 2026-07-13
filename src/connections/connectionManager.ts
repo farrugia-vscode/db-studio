@@ -26,11 +26,16 @@ export class ConnectionManager {
     return this.getConnections().find((connection) => connection.name === name);
   }
 
-  async saveConnection(config: ConnectionConfig, password: string): Promise<void> {
+  /** Saves (adds or replaces) a connection. Pass `password: undefined` to keep the stored one. */
+  async saveConnection(config: ConnectionConfig, password?: string): Promise<void> {
     const connections = this.getConnections().filter((connection) => connection.name !== config.name);
     connections.push(config);
     await this.writeConnections(connections);
-    await this.context.secrets.store(SECRET_PREFIX + config.name, password);
+    if (password !== undefined) {
+      await this.context.secrets.store(SECRET_PREFIX + config.name, password);
+    }
+    // Drop any cached driver so the new host/credentials take effect on next use.
+    await this.closeDriver(config.name);
   }
 
   async removeConnection(name: string): Promise<void> {

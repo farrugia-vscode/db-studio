@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
+import { ConnectionIconProvider } from './connectionIconProvider';
 import { SchemaNode } from './schemaNode';
 
 const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
@@ -12,7 +13,10 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
   private readonly emitter = new vscode.EventEmitter<SchemaNode | undefined>();
   readonly onDidChangeTreeData = this.emitter.event;
 
-  constructor(private readonly manager: ConnectionManager) {}
+  constructor(
+    private readonly manager: ConnectionManager,
+    private readonly icons: ConnectionIconProvider,
+  ) {}
 
   refresh(): void {
     this.emitter.fire(undefined);
@@ -24,7 +28,7 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
 
   getChildren(node?: SchemaNode): Promise<SchemaNode[]> {
     if (!node) {
-      return Promise.resolve(this.buildConnectionNodes());
+      return this.buildConnectionNodes();
     }
     if (node.kind === 'connection') {
       return this.buildNamespaceNodes(node);
@@ -38,13 +42,16 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     return Promise.resolve([]);
   }
 
-  private buildConnectionNodes(): SchemaNode[] {
-    return this.manager.getConnections().map((connection) => {
-      const node = new SchemaNode('connection', connection.name, Collapsed, connection.name);
-      node.description = `${connection.driver} · ${connection.host}`;
-      node.iconPath = new vscode.ThemeIcon('database');
-      return node;
-    });
+  private async buildConnectionNodes(): Promise<SchemaNode[]> {
+    const connections = this.manager.getConnections();
+    return Promise.all(
+      connections.map(async (connection) => {
+        const node = new SchemaNode('connection', connection.name, Collapsed, connection.name);
+        node.description = `${connection.driver} · ${connection.host}`;
+        node.iconPath = await this.icons.iconFor(connection.color);
+        return node;
+      }),
+    );
   }
 
   private async buildNamespaceNodes(parent: SchemaNode): Promise<SchemaNode[]> {

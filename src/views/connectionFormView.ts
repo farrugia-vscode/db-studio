@@ -1,0 +1,134 @@
+import * as vscode from 'vscode';
+import { ConnectionManager } from '../connections/connectionManager';
+import type { ConnectionConfig } from '../domain/types';
+import type { ExtensionToForm, FormToExtension } from '../domain/formProtocol';
+
+/**
+ * Webview form to add or edit a connection in one screen (name, driver, host,
+ * port, user, database, password, color). In edit mode the password field may
+ * be left blank to keep the stored one.
+ */
+export class ConnectionFormView {
+  private panel: vscode.WebviewPanel | null = null;
+  private editing: ConnectionConfig | null = null;
+
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly manager: ConnectionManager,
+    private readonly onSaved: () => void,
+  ) {}
+
+  open(existing?: ConnectionConfig): void {
+    this.editing = existing ?? null;
+    if (!this.panel) {
+      this.createPanel();
+    }
+    this.panel!.title = existing ? `Edit ${existing.name}` : 'New Connection';
+    this.panel!.reveal();
+    this.postInit();
+  }
+
+  private createPanel(): void {
+    const mediaUri = vscode.Uri.joinPath(this.context.extensionUri, 'media');
+    this.panel = vscode.window.createWebviewPanel('dbStudio.connectionForm', 'New Connection', vscode.ViewColumn.Active, {
+      enableScripts: true,
+      localResourceRoots: [mediaUri],
+    });
+    this.panel.webview.html = this.renderHtml(this.panel.webview, mediaUri);
+    this.panel.webview.onDidReceiveMessage((message: FormToExtension) => this.handleMessage(message));
+    this.panel.onDidDispose(() => {
+      this.panel = null;
+      this.editing = null;
+    });
+  }
+
+  private async handleMessage(message: FormToExtension): Promise<void> {
+    if (message.type === 'ready') {
+      this.postInit();
+      return;
+    }
+    if (message.type === 'cancel') {
+      this.panel?.dispose();
+      return;
+    }
+    if (message.type === 'submit') {
+      await this.save(message.connection, message.password);
+    }
+  }
+
+  private async save(connection: ConnectionConfig, password: string): Promise<void> {
+    // Edit mode + blank password → keep the stored secret; add mode always stores what was typed.
+    const keepStored = this.editing !== null && password === '';
+    try {
+      await this.manager.saveConnection(connection, keepStored ? undefined : password);
+      this.onSaved();
+      this.panel?.dispose();
+      vscode.window.showInformationMessage(`Connection "${connection.name}" saved.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`DB Studio: ${detail}`);
+    }
+  }
+
+  private postInit(): void {
+    const message: ExtensionToForm = {
+      type: 'init',
+      isEdit: this.editing !== null,
+      connection: this.editing ?? {},
+    };
+    this.panel?.webview.postMessage(message);
+  }
+
+  private renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'form.js'));
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'form.css'));
+    const nonce = buildNonce();
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+<link href="${styleUri}" rel="stylesheet">
+</head>
+<body>
+  <form id="form" autocomplete="off">
+    <label>Name<input id="name" required></label>
+    <label>Driver
+      <select id="driver">
+        <option value="mysql">MySQL / MariaDB</option>
+        <option value="postgres">PostgreSQL</option>
+      </select>
+    </label>
+    <div class="row">
+      <label class="grow">Host<input id="host" value="127.0.0.1" required></label>
+      <label class="port">Port<input id="port" type="number"></label>
+    </div>
+    <label>User<input id="user" required></label>
+    <label>Database<input id="database" placeholder="optional (required for PostgreSQL)"></label>
+    <label>Password<input id="password" type="password"></label>
+    <label>Color
+      <span class="color-row">
+        <input id="color" type="color" value="#4ec94e">
+        <span id="swatches"></span>
+        <button type="button" id="clearColor">No color</button>
+      </span>
+    </label>
+    <div class="actions">
+      <button type="submit" id="save" class="primary">Save</button>
+      <button type="button" id="cancel">Cancel</button>
+    </div>
+  </form>
+  <script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>`;
+  }
+}
+
+function buildNonce(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let nonce = '';
+  for (let index = 0; index < 32; index += 1) {
+    nonce += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return nonce;
+}

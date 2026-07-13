@@ -14,24 +14,31 @@ const extensionConfig: esbuild.BuildOptions = {
   logLevel: 'info',
 };
 
-const webviewConfig: esbuild.BuildOptions = {
-  entryPoints: ['src/webview/grid.ts'],
-  outfile: 'media/grid.js',
+const webviewEntries: Array<[string, string]> = [
+  ['src/webview/grid.ts', 'media/grid.js'],
+  ['src/webview/form.ts', 'media/form.js'],
+];
+
+const webviewConfigs: esbuild.BuildOptions[] = webviewEntries.map(([entry, outfile]) => ({
+  entryPoints: [entry],
+  outfile,
   bundle: true,
   platform: 'browser',
   format: 'iife',
   target: 'es2020',
   sourcemap: true,
   logLevel: 'info',
-};
+}));
+
+const allConfigs = [extensionConfig, ...webviewConfigs];
 
 async function run(): Promise<void> {
   if (isWatch) {
-    const contexts = await Promise.all([esbuild.context(extensionConfig), esbuild.context(webviewConfig)]);
+    const contexts = await Promise.all(allConfigs.map((config) => esbuild.context(config)));
     await Promise.all(contexts.map((context) => context.watch()));
     return;
   }
-  await Promise.all([esbuild.build(extensionConfig), esbuild.build(webviewConfig)]);
+  await Promise.all(allConfigs.map((config) => esbuild.build(config)));
 }
 
 run().catch((error) => {
