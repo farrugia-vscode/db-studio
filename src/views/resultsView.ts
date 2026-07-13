@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { QueryResult } from '../domain/types';
+import { titleForeground } from '../domain/color';
 
 /**
  * Renders arbitrary query results as a read-only HTML grid. Editing a specific
@@ -19,13 +20,13 @@ export class ResultsView {
       });
     }
     this.panel.title = title;
-    this.panel.webview.html = this.renderHtml(result, color);
+    this.panel.webview.html = this.renderHtml(title, result, color);
     this.panel.reveal();
   }
 
-  private renderHtml(result: QueryResult, color?: string): string {
+  private renderHtml(title: string, result: QueryResult, color?: string): string {
     if (result.columns.length === 0) {
-      return this.wrap(`<p class="summary">Query OK · ${result.affectedRows ?? 0} row(s) affected.</p>`, color);
+      return this.wrap(title, `<div class="summary">Query OK · ${result.affectedRows ?? 0} row(s) affected.</div>`, color);
     }
     const head = result.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('');
     const body = result.rows
@@ -35,22 +36,22 @@ export class ResultsView {
       })
       .join('');
     const table = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
-    return this.wrap(`<div class="summary">${result.rows.length} row(s)</div>${table}`, color);
+    return this.wrap(title, `<div class="summary">${result.rows.length} row(s)</div>${table}`, color);
   }
 
-  private wrap(inner: string, color?: string): string {
-    const tint = color ? `--conn:${escapeHtml(color)};` : '';
+  private wrap(title: string, inner: string, color?: string): string {
+    const vars = color ? `--conn:${escapeHtml(color)}; --title-fg:${titleForeground(color)};` : '';
     const tinted = color ? ' class="tinted"' : '';
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
-  :root { --conn: transparent; --cell-px: 12px; --cell-py: 7px; }
+  :root { --conn: transparent; --title-fg: #fff; --cell-px: 12px; --cell-py: 7px; }
   html, body { height: 100%; }
   body { margin: 0; font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); }
-  body.tinted { background: color-mix(in srgb, var(--conn) 6%, var(--vscode-editor-background)); }
-  body.tinted::before { content: ''; display: block; height: 3px; background: var(--conn); }
+  #titlebar { padding: 8px 16px; font-size: 13px; font-weight: 600; background: var(--vscode-editorWidget-background); border-bottom: 1px solid var(--vscode-panel-border); }
+  body.tinted #titlebar { color: var(--title-fg); background: var(--conn); border-bottom-color: color-mix(in srgb, var(--conn) 60%, black); }
   .summary { color: var(--vscode-descriptionForeground); font-size: 12px; padding: 10px 16px; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
   th, td {
@@ -62,12 +63,14 @@ export class ResultsView {
     position: sticky; top: 0; z-index: 1;
     background: var(--vscode-editorWidget-background); font-weight: 600; letter-spacing: 0.02em;
   }
-  body.tinted th { background: color-mix(in srgb, var(--conn) 12%, var(--vscode-editorWidget-background)); }
   tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--vscode-list-hoverBackground) 35%, transparent); }
   tbody tr:hover td { background: var(--vscode-list-hoverBackground); }
 </style>
 </head>
-<body${tinted} style="${tint}">${inner}</body>
+<body${tinted} style="${vars}">
+  <div id="titlebar">${escapeHtml(title)}</div>
+  ${inner}
+</body>
 </html>`;
   }
 }

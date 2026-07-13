@@ -35,6 +35,13 @@ export class DataGridView {
     await this.reload();
   }
 
+  /** Re-tints the open grid when its connection's color changed (no data reload). */
+  updateColor(connectionName: string): void {
+    if (this.panel && this.target?.connectionName === connectionName) {
+      this.post({ type: 'color', color: this.manager.getConnection(connectionName)?.color });
+    }
+  }
+
   private createPanel(): void {
     const mediaUri = vscode.Uri.joinPath(this.context.extensionUri, 'media');
     this.panel = vscode.window.createWebviewPanel('dbStudio.dataGrid', 'Data', vscode.ViewColumn.Active, {
@@ -134,6 +141,7 @@ export class DataGridView {
 <link href="${styleUri}" rel="stylesheet">
 </head>
 <body>
+  <div id="titlebar"><span id="title"></span></div>
   <div class="toolbar">
     <button id="commit" class="primary" disabled>Commit</button>
     <span id="status"></span>

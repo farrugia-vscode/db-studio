@@ -1,6 +1,7 @@
 import type { ExtensionToWebview, WebviewToExtension } from '../domain/gridProtocol';
 import type { ColumnMeta, Row } from '../domain/types';
 import type { EditDto } from '../domain/edits/edit';
+import { titleForeground } from '../domain/color';
 
 interface VsCodeApi {
   postMessage(message: WebviewToExtension): void;
@@ -31,6 +32,7 @@ const measureCtx = document.createElement('canvas').getContext('2d');
 let cellFont = '12px monospace';
 
 const grid = element<HTMLTableElement>('grid');
+const titleEl = element<HTMLSpanElement>('title');
 const notice = element<HTMLDivElement>('notice');
 const status = element<HTMLSpanElement>('status');
 const commitButton = element<HTMLButtonElement>('commit');
@@ -42,8 +44,13 @@ reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' })
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
   if (message.type === 'data') {
+    titleEl.textContent = message.table;
     applyColor(message.color);
     loadData(message.columns, message.pkColumns, message.rows);
+    return;
+  }
+  if (message.type === 'color') {
+    applyColor(message.color);
     return;
   }
   if (message.type === 'error') {
@@ -56,6 +63,7 @@ api.postMessage({ type: 'ready' });
 
 function applyColor(color?: string): void {
   document.documentElement.style.setProperty('--conn', color ?? 'transparent');
+  document.documentElement.style.setProperty('--title-fg', color ? titleForeground(color) : '#fff');
   document.body.classList.toggle('tinted', Boolean(color));
 }
 
@@ -144,6 +152,7 @@ function startResize(event: MouseEvent, index: number): void {
   document.body.classList.add('resizing');
   const onMove = (moveEvent: MouseEvent): void => {
     colElements[index].style.width = `${Math.max(MIN_WIDTH, startWidth + moveEvent.clientX - startX)}px`;
+    syncTableWidth();
   };
   const onUp = (): void => {
     document.body.classList.remove('resizing');
@@ -161,6 +170,17 @@ function autofitAll(maxWidth: number): void {
 
 function autofit(index: number, maxWidth: number): void {
   colElements[index].style.width = `${measureColumn(index, maxWidth)}px`;
+  syncTableWidth();
+}
+
+// Pin the table width to the sum of its columns so widening a column overflows
+// (horizontal scroll) instead of squeezing the others.
+function syncTableWidth(): void {
+  let total = 30; // actions column + border slack
+  for (const col of colElements) {
+    total += parseFloat(col.style.width) || 0;
+  }
+  grid.style.width = `${total}px`;
 }
 
 function measureColumn(index: number, maxWidth: number): number {

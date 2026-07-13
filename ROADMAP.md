@@ -27,8 +27,9 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Revert merged into Reload
 - [x] Resizable columns (drag + double-click auto-fit)
 - [x] Flat redesign: spacing, header, zebra + hover, add-row footer
-- [x] Window tinted with the connection color
-- [x] Horizontal scroll
+- [x] Colored title bar (connection color) with live re-tint on color change
+- [x] Red highlight for rows pending deletion
+- [x] Horizontal scroll (table width synced to columns on resize)
 - [ ] Filter bar (quick filter / per-column)
 - [ ] Pagination (offset/limit or keyset)
 - [ ] Sort by column (click header)

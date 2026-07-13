@@ -17,7 +17,10 @@ let dataGridView: DataGridView;
 export function activate(context: vscode.ExtensionContext): void {
   manager = new ConnectionManager(context, new DriverFactory());
   treeProvider = new SchemaTreeProvider(manager, new ConnectionIconProvider(context));
-  formView = new ConnectionFormView(context, manager, () => treeProvider.refresh());
+  formView = new ConnectionFormView(context, manager, (name) => {
+    treeProvider.refresh();
+    dataGridView.updateColor(name);
+  });
   resultsView = new ResultsView();
   dataGridView = new DataGridView(context, manager);
 

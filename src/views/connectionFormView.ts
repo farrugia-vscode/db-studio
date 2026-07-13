@@ -15,7 +15,7 @@ export class ConnectionFormView {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly manager: ConnectionManager,
-    private readonly onSaved: () => void,
+    private readonly onSaved: (connectionName: string) => void,
   ) {}
 
   open(existing?: ConnectionConfig): void {
@@ -92,7 +92,7 @@ export class ConnectionFormView {
       } else {
         await this.manager.saveConnection(connection, resolvedPassword);
       }
-      this.onSaved();
+      this.onSaved(connection.name);
       this.panel?.dispose();
       vscode.window.showInformationMessage(`Connection "${connection.name}" saved.`);
     } catch (error) {

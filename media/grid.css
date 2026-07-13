@@ -18,8 +18,21 @@ body {
   background: var(--vscode-editor-background);
 }
 
-body.tinted {
-  background: color-mix(in srgb, var(--conn) 6%, var(--vscode-editor-background));
+/* ---- Title bar (carries the connection color) ---- */
+#titlebar {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+body.tinted #titlebar {
+  color: var(--title-fg, #fff);
+  background: var(--conn);
+  border-bottom-color: color-mix(in srgb, var(--conn) 60%, black);
 }
 
 /* ---- Toolbar ---- */
@@ -31,12 +44,6 @@ body.tinted {
   padding: 10px 16px;
   background: var(--vscode-editorWidget-background);
   border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-body.tinted .toolbar {
-  background: color-mix(in srgb, var(--conn) 10%, var(--vscode-editorWidget-background));
-  border-top: 3px solid var(--conn);
-  border-bottom-color: color-mix(in srgb, var(--conn) 35%, var(--vscode-panel-border));
 }
 
 .toolbar button {
@@ -122,10 +129,6 @@ th {
   letter-spacing: 0.02em;
 }
 
-body.tinted th {
-  background: color-mix(in srgb, var(--conn) 12%, var(--vscode-editorWidget-background));
-}
-
 th.pk::after {
   content: ' 🔑';
   font-size: 10px;
@@ -196,7 +199,8 @@ tr.inserted td {
 
 tr.deleted td {
   text-decoration: line-through;
-  opacity: 0.5;
+  color: var(--vscode-errorForeground);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 22%, transparent) !important;
 }
 
 td.actions {
