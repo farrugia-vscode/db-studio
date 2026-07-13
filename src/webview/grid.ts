@@ -22,6 +22,13 @@ let columns: ColumnMeta[] = [];
 let pkColumns: string[] = [];
 let rowModels: RowModel[] = [];
 let hasPrimaryKey = false;
+let colElements: HTMLTableColElement[] = [];
+
+const MIN_WIDTH = 56;
+const INITIAL_MAX_WIDTH = 360;
+const CELL_PADDING = 18;
+const measureCtx = document.createElement('canvas').getContext('2d');
+let cellFont = '12px monospace';
 
 const grid = element<HTMLTableElement>('grid');
 const notice = element<HTMLDivElement>('notice');
@@ -63,23 +70,104 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
 }
 
 function render(): void {
-  grid.replaceChildren(buildHead(), buildBody());
+  colElements = [];
+  grid.replaceChildren(buildColgroup(), buildHead(), buildBody());
+  autofitAll(INITIAL_MAX_WIDTH);
+}
+
+function buildColgroup(): HTMLTableColElement {
+  const group = document.createElement('colgroup');
+  const actionsCol = document.createElement('col');
+  actionsCol.style.width = '28px';
+  group.appendChild(actionsCol);
+  for (const _column of columns) {
+    const col = document.createElement('col');
+    colElements.push(col);
+    group.appendChild(col);
+  }
+  return group as unknown as HTMLTableColElement;
 }
 
 function buildHead(): HTMLTableSectionElement {
   const head = document.createElement('thead');
   const row = document.createElement('tr');
   row.appendChild(document.createElement('th'));
-  for (const column of columns) {
+  columns.forEach((column, index) => {
     const cell = document.createElement('th');
     cell.textContent = column.name;
     if (column.isPrimaryKey) {
       cell.classList.add('pk');
     }
+    cell.appendChild(buildResizer(index));
     row.appendChild(cell);
-  }
+  });
   head.appendChild(row);
   return head;
+}
+
+// Excel-like column sizing: drag the right edge to widen/narrow, double-click to auto-fit.
+function buildResizer(index: number): HTMLDivElement {
+  const resizer = document.createElement('div');
+  resizer.className = 'col-resizer';
+  resizer.addEventListener('mousedown', (event) => startResize(event, index));
+  resizer.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    autofit(index, 1000);
+  });
+  return resizer;
+}
+
+function startResize(event: MouseEvent, index: number): void {
+  event.preventDefault();
+  const header = (event.target as HTMLElement).parentElement as HTMLElement;
+  const startX = event.clientX;
+  const startWidth = header.getBoundingClientRect().width;
+  document.body.classList.add('resizing');
+  const onMove = (moveEvent: MouseEvent): void => {
+    colElements[index].style.width = `${Math.max(MIN_WIDTH, startWidth + moveEvent.clientX - startX)}px`;
+  };
+  const onUp = (): void => {
+    document.body.classList.remove('resizing');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function autofitAll(maxWidth: number): void {
+  updateCellFont();
+  columns.forEach((_column, index) => autofit(index, maxWidth));
+}
+
+function autofit(index: number, maxWidth: number): void {
+  colElements[index].style.width = `${measureColumn(index, maxWidth)}px`;
+}
+
+function measureColumn(index: number, maxWidth: number): number {
+  if (!measureCtx) {
+    return 150;
+  }
+  measureCtx.font = cellFont;
+  const column = columns[index];
+  let widest = measureCtx.measureText(column.name).width + (column.isPrimaryKey ? 16 : 0);
+  for (const model of rowModels) {
+    const value = model.values[column.name];
+    const width = measureCtx.measureText(value ?? 'NULL').width;
+    if (width > widest) {
+      widest = width;
+    }
+  }
+  return Math.min(maxWidth, Math.max(MIN_WIDTH, Math.ceil(widest) + CELL_PADDING));
+}
+
+function updateCellFont(): void {
+  const sample = grid.querySelector('td input') ?? grid.querySelector('th');
+  if (!sample) {
+    return;
+  }
+  const style = getComputedStyle(sample);
+  cellFont = style.font && style.font.trim() ? style.font : `${style.fontSize} ${style.fontFamily}`;
 }
 
 function buildBody(): HTMLTableSectionElement {

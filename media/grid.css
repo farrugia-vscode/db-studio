@@ -63,6 +63,7 @@ body {
 
 table {
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12px;
 }
 
@@ -72,6 +73,31 @@ td {
   padding: 0;
   text-align: left;
   white-space: nowrap;
+  overflow: hidden;
+}
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.col-resizer:hover {
+  background: var(--vscode-focusBorder);
+  opacity: 0.5;
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.resizing input {
+  pointer-events: none;
 }
 
 th {
