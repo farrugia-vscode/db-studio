@@ -2,7 +2,7 @@
   "name": "db-studio",
   "displayName": "DB Studio",
   "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL)",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "farrugia",
   "icon": "icon.png",
   "engines": {
@@ -40,30 +40,36 @@
     "commands": [
       {
         "command": "dbStudio.addConnection",
-        "title": "DB Studio: Add Connection",
-        "icon": "$(add)"
+        "title": "Add Connection",
+        "icon": "$(add)",
+        "category": "DB Studio"
       },
       {
         "command": "dbStudio.editConnection",
-        "title": "DB Studio: Edit Connection",
-        "icon": "$(edit)"
+        "title": "Edit Connection",
+        "icon": "$(edit)",
+        "category": "DB Studio"
       },
       {
         "command": "dbStudio.removeConnection",
-        "title": "DB Studio: Remove Connection"
+        "title": "Remove Connection",
+        "category": "DB Studio"
       },
       {
         "command": "dbStudio.refresh",
-        "title": "DB Studio: Refresh",
-        "icon": "$(refresh)"
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "DB Studio"
       },
       {
         "command": "dbStudio.runQuery",
-        "title": "DB Studio: Run SQL Query"
+        "title": "Run SQL Query",
+        "category": "DB Studio"
       },
       {
         "command": "dbStudio.openTableData",
-        "title": "DB Studio: Open Table Data"
+        "title": "Open Table Data",
+        "category": "DB Studio"
       }
     ],
     "menus": {
