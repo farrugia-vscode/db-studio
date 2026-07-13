@@ -121,13 +121,21 @@ function buildDeleteCell(model: RowModel, row: HTMLTableRowElement): HTMLTableCe
 function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   const cell = document.createElement('td');
   const input = document.createElement('input');
-  const isReadOnly = !hasPrimaryKey || (column.isPrimaryKey && model.original !== null);
+  const isInserted = model.original === null;
+  // The DB fills auto-increment / identity columns itself, so a new row shows <generated>.
+  const isGenerated = column.isAutoIncrement && isInserted;
+  const isReadOnly = !hasPrimaryKey || isGenerated || (column.isPrimaryKey && !isInserted);
   const value = model.values[column.name];
   input.value = value ?? '';
   input.readOnly = isReadOnly;
-  input.placeholder = value === null ? 'NULL' : '';
-  if (value === null) {
-    input.classList.add('null');
+  if (isGenerated) {
+    input.placeholder = '<generated>';
+    input.classList.add('generated');
+  } else {
+    input.placeholder = value === null ? 'NULL' : '';
+    if (value === null) {
+      input.classList.add('null');
+    }
   }
   input.addEventListener('input', () => {
     model.values[column.name] = readInput(input, column);
@@ -217,9 +225,21 @@ function appendUpdate(edits: EditDto[], model: RowModel, original: Record<string
 
 function refreshPending(): void {
   const count = computeEdits().length;
+  const dirty = hasLocalChanges();
   commitButton.disabled = count === 0;
-  revertButton.disabled = count === 0;
-  status.textContent = count === 0 ? '' : `${count} pending change(s)`;
+  // Revert is available for any local change — including freshly added (still empty) rows.
+  revertButton.disabled = !dirty;
+  status.textContent = count > 0 ? `${count} pending change(s)` : dirty ? 'unsaved changes' : '';
+}
+
+function hasLocalChanges(): boolean {
+  return rowModels.some((model) => {
+    if (model.original === null || model.deleted) {
+      return true;
+    }
+    const original = model.original;
+    return columns.some((column) => model.values[column.name] !== original[column.name]);
+  });
 }
 
 function pick(row: Record<string, CellValue>, keys: string[]): Row {

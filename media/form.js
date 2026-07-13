@@ -16,6 +16,8 @@
   var swatches = byId("swatches");
   var clearColorButton = byId("clearColor");
   var cancelButton = byId("cancel");
+  var testButton = byId("test");
+  var result = byId("result");
   var useColor = true;
   buildSwatches();
   driverSelect.addEventListener("change", () => {
@@ -26,13 +28,20 @@
   colorInput.addEventListener("input", () => setUseColor(true));
   clearColorButton.addEventListener("click", () => setUseColor(false));
   cancelButton.addEventListener("click", () => api.postMessage({ type: "cancel" }));
+  testButton.addEventListener("click", test);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     submit();
   });
   window.addEventListener("message", (event) => {
-    if (event.data.type === "init") {
-      applyInit(event.data.isEdit, event.data.connection);
+    const message = event.data;
+    if (message.type === "init") {
+      applyInit(message.isEdit, message.connection);
+      return;
+    }
+    if (message.type === "testResult") {
+      showResult(message.ok ? "ok" : "error", message.message);
+      testButton.disabled = false;
     }
   });
   api.postMessage({ type: "ready" });
@@ -53,8 +62,8 @@
       setUseColor(!isEdit);
     }
   }
-  function submit() {
-    const connection = {
+  function readConnection() {
+    return {
       name: nameInput.value.trim(),
       driver: driverSelect.value,
       host: hostInput.value.trim(),
@@ -63,7 +72,18 @@
       database: databaseInput.value.trim() || void 0,
       color: useColor ? colorInput.value : void 0
     };
-    api.postMessage({ type: "submit", connection, password: passwordInput.value });
+  }
+  function submit() {
+    api.postMessage({ type: "submit", connection: readConnection(), password: passwordInput.value });
+  }
+  function test() {
+    testButton.disabled = true;
+    showResult("pending", "Testing\u2026");
+    api.postMessage({ type: "test", connection: readConnection(), password: passwordInput.value });
+  }
+  function showResult(state, message) {
+    result.textContent = message;
+    result.className = `result ${state}`;
   }
   function setUseColor(next) {
     useColor = next;

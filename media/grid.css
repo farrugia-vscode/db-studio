@@ -113,6 +113,12 @@ td input.null {
   color: var(--vscode-descriptionForeground);
 }
 
+td input.generated {
+  font-style: italic;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.7;
+}
+
 td.dirty {
   background: var(--vscode-diffEditor-insertedTextBackground, rgba(78, 201, 78, 0.15));
 }

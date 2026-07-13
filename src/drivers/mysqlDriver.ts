@@ -55,7 +55,7 @@ export class MysqlDriver implements DatabaseDriver {
 
   async listColumns(namespace: string, table: string): Promise<ColumnMeta[]> {
     const rows = await this.select(
-      `SELECT column_name AS name, column_type AS type, is_nullable AS nullable, column_key AS keyType
+      `SELECT column_name AS name, column_type AS type, is_nullable AS nullable, column_key AS keyType, extra AS extra
        FROM information_schema.columns
        WHERE table_schema = ? AND table_name = ?
        ORDER BY ordinal_position`,
@@ -66,6 +66,7 @@ export class MysqlDriver implements DatabaseDriver {
       type: String(row.type),
       isNullable: row.nullable === 'YES',
       isPrimaryKey: row.keyType === 'PRI',
+      isAutoIncrement: String(row.extra).includes('auto_increment'),
     }));
   }
 

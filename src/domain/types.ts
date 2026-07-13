@@ -16,6 +16,8 @@ export interface ColumnMeta {
   type: string;
   isNullable: boolean;
   isPrimaryKey: boolean;
+  /** Auto-increment (MySQL) or identity / serial (PostgreSQL): value is DB-generated on insert. */
+  isAutoIncrement: boolean;
 }
 
 export type Row = Record<string, unknown>;

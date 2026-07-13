@@ -64,8 +64,11 @@ export class PostgresDriver implements DatabaseDriver {
       type: string;
       nullable: string;
       is_primary_key: boolean;
+      is_identity: string;
+      column_default: string | null;
     }>(
       `SELECT c.column_name AS name, c.data_type AS type, c.is_nullable AS nullable,
+              c.is_identity AS is_identity, c.column_default AS column_default,
               (pk.column_name IS NOT NULL) AS is_primary_key
        FROM information_schema.columns c
        LEFT JOIN (
@@ -84,6 +87,7 @@ export class PostgresDriver implements DatabaseDriver {
       type: row.type,
       isNullable: row.nullable === 'YES',
       isPrimaryKey: row.is_primary_key === true,
+      isAutoIncrement: row.is_identity === 'YES' || (row.column_default ?? '').startsWith('nextval('),
     }));
   }
 
