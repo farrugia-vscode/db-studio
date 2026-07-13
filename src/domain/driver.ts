@@ -19,7 +19,7 @@ export interface SchemaIntrospector {
 }
 
 export interface StatementExecutor {
-  query(sql: string): Promise<QueryResult>;
+  query(sql: string, params?: unknown[]): Promise<QueryResult>;
   runWrite(sql: string, params: unknown[]): Promise<number>;
 }
 
@@ -29,6 +29,8 @@ export interface SqlDialect {
   buildTableRef(namespace: string, table: string): string;
   /** Positional placeholder for parameter `index` (1-based): `?` or `$index`. */
   placeholder(index: number): string;
+  /** Case-insensitive LIKE operator for this engine (`LIKE` on MySQL, `ILIKE` on PostgreSQL). */
+  likeOperator(): string;
 }
 
 export interface DatabaseDriver extends Connectable, SchemaIntrospector, StatementExecutor, SqlDialect {}

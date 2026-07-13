@@ -27,11 +27,14 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Revert merged into Reload
 - [x] Resizable columns (drag + double-click auto-fit)
 - [x] Flat redesign: spacing, header, zebra + hover, add-row footer
-- [x] Colored title bar (connection color) with live re-tint on color change
-- [x] Red highlight for rows pending deletion
+- [x] Connection color cue (3px strip on windows) + live re-tint on color change
+- [x] Red highlight for rows pending deletion; drop uncommitted new rows on delete
 - [x] Horizontal scroll (table width synced to columns on resize)
-- [ ] Filter bar (quick filter / per-column)
-- [ ] Pagination (offset/limit or keyset)
+- [x] Free-text filter (server-side, across all columns)
+- [x] Pagination (page size + first / prev / next / last)
+- [ ] Hide / show columns
+- [ ] Edit a cell on double-click only (not single click)
+- [ ] Better JSON cell editor (expanded / modal)
 - [ ] Sort by column (click header)
 - [ ] Copy cell / row, export selection
 
@@ -45,10 +48,11 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [ ] CSV export & import
 - [ ] SQL dump
 
-## Tree color note
-VS Code's TreeView API has no per-row background; connection color is shown via the
-tinted **icon** and the tinted **windows** (grid, results). A full colored tree row
-is not possible through the API.
+## Color recognition note
+VS Code exposes no API to color an editor **tab** or a **tree row/panel** background.
+So the connection color is surfaced where it's actually possible: a tinted **icon** in
+the tree (todo: colored label via FileDecorationProvider) and a 3px color **strip** on
+each related window (grid, results).
 
 ## Infra
 - [x] TypeScript + esbuild (bundled), SOLID layering

@@ -10,6 +10,10 @@ export interface GridDataMessage {
   rows: Row[];
   /** The owning connection's color, tinting the grid window. */
   color?: string;
+  /** Pagination: total matching rows, current window start and page size. */
+  total: number;
+  offset: number;
+  pageSize: number;
 }
 
 export interface GridErrorMessage {
@@ -39,4 +43,17 @@ export interface CommitMessage {
   edits: EditDto[];
 }
 
-export type WebviewToExtension = ReadyMessage | ReloadMessage | CommitMessage;
+/** Server-side quick filter across all columns. */
+export interface FilterMessage {
+  type: 'filter';
+  value: string;
+}
+
+/** Move to a page / change the page size. */
+export interface PageMessage {
+  type: 'page';
+  offset: number;
+  pageSize: number;
+}
+
+export type WebviewToExtension = ReadyMessage | ReloadMessage | CommitMessage | FilterMessage | PageMessage;

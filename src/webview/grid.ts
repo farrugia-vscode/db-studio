@@ -32,21 +32,46 @@ const measureCtx = document.createElement('canvas').getContext('2d');
 let cellFont = '12px monospace';
 
 const grid = element<HTMLTableElement>('grid');
-const titleEl = element<HTMLSpanElement>('title');
 const notice = element<HTMLDivElement>('notice');
 const status = element<HTMLSpanElement>('status');
 const commitButton = element<HTMLButtonElement>('commit');
 const reloadButton = element<HTMLButtonElement>('reload');
+const filterInput = element<HTMLInputElement>('filter');
+const pagerFirst = element<HTMLButtonElement>('pagerFirst');
+const pagerPrev = element<HTMLButtonElement>('pagerPrev');
+const pagerNext = element<HTMLButtonElement>('pagerNext');
+const pagerLast = element<HTMLButtonElement>('pagerLast');
+const pagerInfo = element<HTMLSpanElement>('pagerInfo');
+const pageSizeInput = element<HTMLInputElement>('pageSize');
+
+let total = 0;
+let offset = 0;
+let pageSize = 200;
+let filterTimer = 0;
 
 commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
+filterInput.addEventListener('input', () => {
+  clearTimeout(filterTimer);
+  filterTimer = window.setTimeout(() => api.postMessage({ type: 'filter', value: filterInput.value }), 300);
+});
+pagerFirst.addEventListener('click', () => goToOffset(0));
+pagerPrev.addEventListener('click', () => goToOffset(offset - pageSize));
+pagerNext.addEventListener('click', () => goToOffset(offset + pageSize));
+pagerLast.addEventListener('click', () => goToOffset(lastOffset()));
+pageSizeInput.addEventListener('change', () => {
+  api.postMessage({ type: 'page', offset: 0, pageSize: Math.max(1, parseInt(pageSizeInput.value, 10) || pageSize) });
+});
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
   if (message.type === 'data') {
-    titleEl.textContent = message.table;
     applyColor(message.color);
+    total = message.total;
+    offset = message.offset;
+    pageSize = message.pageSize;
     loadData(message.columns, message.pkColumns, message.rows);
+    updatePager();
     return;
   }
   if (message.type === 'color') {
@@ -65,6 +90,25 @@ function applyColor(color?: string): void {
   document.documentElement.style.setProperty('--conn', color ?? 'transparent');
   document.documentElement.style.setProperty('--title-fg', color ? titleForeground(color) : '#fff');
   document.body.classList.toggle('tinted', Boolean(color));
+}
+
+function goToOffset(next: number): void {
+  api.postMessage({ type: 'page', offset: Math.max(0, Math.min(next, lastOffset())), pageSize });
+}
+
+function lastOffset(): number {
+  return total === 0 ? 0 : Math.floor((total - 1) / pageSize) * pageSize;
+}
+
+function updatePager(): void {
+  pageSizeInput.value = String(pageSize);
+  pagerInfo.textContent = `${total === 0 ? 0 : offset + 1}–${offset + rowModels.length} of ${total}`;
+  const atStart = offset === 0;
+  const atEnd = offset + pageSize >= total;
+  pagerFirst.disabled = atStart;
+  pagerPrev.disabled = atStart;
+  pagerNext.disabled = atEnd;
+  pagerLast.disabled = atEnd;
 }
 
 function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[]): void {
@@ -237,6 +281,13 @@ function buildDeleteCell(model: RowModel, row: HTMLTableRowElement): HTMLTableCe
   button.textContent = '×';
   button.title = 'Delete row';
   button.addEventListener('click', () => {
+    if (model.original === null) {
+      // Uncommitted new row → just drop it, no "marked for deletion" state.
+      rowModels = rowModels.filter((candidate) => candidate !== model);
+      render();
+      refreshPending();
+      return;
+    }
     model.deleted = !model.deleted;
     applyRowState(row, model);
     refreshPending();

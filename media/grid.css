@@ -18,21 +18,12 @@ body {
   background: var(--vscode-editor-background);
 }
 
-/* ---- Title bar (carries the connection color) ---- */
-#titlebar {
+/* ---- Connection color accent (thin strip, ~no height cost) ---- */
+body.tinted::before {
+  content: '';
   flex: 0 0 auto;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--vscode-foreground);
-  background: var(--vscode-editorWidget-background);
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-body.tinted #titlebar {
-  color: var(--title-fg, #fff);
+  height: 3px;
   background: var(--conn);
-  border-bottom-color: color-mix(in srgb, var(--conn) 60%, black);
 }
 
 /* ---- Toolbar ---- */
@@ -74,10 +65,74 @@ body.tinted #titlebar {
   cursor: default;
 }
 
+.toolbar #filter {
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  width: 240px;
+}
+
+.toolbar #filter:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
 .toolbar #status {
   margin-left: auto;
   margin-right: 4px;
   color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+/* ---- Pager ---- */
+#pager {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editorWidget-background);
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+#pager button {
+  cursor: pointer;
+  border: none;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border-radius: 4px;
+  padding: 2px 9px;
+  font-size: 12px;
+}
+
+#pager button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#pager #pagerInfo {
+  min-width: 130px;
+  text-align: center;
+}
+
+#pager .pager-size {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#pager #pageSize {
+  width: 70px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  padding: 2px 6px;
   font-size: 12px;
 }
 

@@ -103,9 +103,13 @@ export class PostgresDriver implements DatabaseDriver {
     return `$${index}`;
   }
 
-  async query(sql: string): Promise<QueryResult> {
+  likeOperator(): string {
+    return 'ILIKE';
+  }
+
+  async query(sql: string, params?: unknown[]): Promise<QueryResult> {
     await this.connect();
-    const result = await this.client!.query(sql);
+    const result = await this.client!.query(sql, params);
     const columns = result.fields ? result.fields.map((field) => field.name) : Object.keys(result.rows[0] ?? {});
     return { columns, rows: result.rows as Row[], affectedRows: result.rowCount ?? undefined };
   }
