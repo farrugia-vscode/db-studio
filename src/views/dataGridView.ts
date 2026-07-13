@@ -136,9 +136,8 @@ export class DataGridView {
   <div class="toolbar">
     <button id="addRow">+ Row</button>
     <button id="commit" class="primary" disabled>Commit</button>
-    <button id="revert" disabled>Revert</button>
-    <button id="reload">Reload</button>
     <span id="status"></span>
+    <button id="reload" title="Reload from the database (discards unsaved changes)">Reload</button>
   </div>
   <div id="notice" class="notice"></div>
   <div id="gridWrap"><table id="grid"></table></div>

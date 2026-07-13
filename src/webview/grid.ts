@@ -35,12 +35,10 @@ const notice = element<HTMLDivElement>('notice');
 const status = element<HTMLSpanElement>('status');
 const addRowButton = element<HTMLButtonElement>('addRow');
 const commitButton = element<HTMLButtonElement>('commit');
-const revertButton = element<HTMLButtonElement>('revert');
 const reloadButton = element<HTMLButtonElement>('reload');
 
 addRowButton.addEventListener('click', addRow);
 commitButton.addEventListener('click', commit);
-revertButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
@@ -315,8 +313,6 @@ function refreshPending(): void {
   const count = computeEdits().length;
   const dirty = hasLocalChanges();
   commitButton.disabled = count === 0;
-  // Revert is available for any local change — including freshly added (still empty) rows.
-  revertButton.disabled = !dirty;
   status.textContent = count > 0 ? `${count} pending change(s)` : dirty ? 'unsaved changes' : '';
 }
 
