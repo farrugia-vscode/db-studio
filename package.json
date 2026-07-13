@@ -1,0 +1,99 @@
+{
+  "name": "db-studio",
+  "displayName": "DB Studio",
+  "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL)",
+  "version": "0.0.1",
+  "publisher": "farrugia",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dbStudio",
+          "title": "DB Studio",
+          "icon": "media/activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "dbStudio": [
+        {
+          "id": "dbStudio.explorer",
+          "name": "Connections"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dbStudio.addConnection",
+        "title": "DB Studio: Add Connection",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dbStudio.removeConnection",
+        "title": "DB Studio: Remove Connection"
+      },
+      {
+        "command": "dbStudio.refresh",
+        "title": "DB Studio: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dbStudio.runQuery",
+        "title": "DB Studio: Run SQL Query"
+      },
+      {
+        "command": "dbStudio.openTableData",
+        "title": "DB Studio: Open Table Data"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "dbStudio.addConnection", "when": "view == dbStudio.explorer", "group": "navigation@1" },
+        { "command": "dbStudio.refresh", "when": "view == dbStudio.explorer", "group": "navigation@2" }
+      ],
+      "view/item/context": [
+        { "command": "dbStudio.runQuery", "when": "view == dbStudio.explorer && viewItem == connection", "group": "inline" },
+        { "command": "dbStudio.removeConnection", "when": "view == dbStudio.explorer && viewItem == connection", "group": "1_manage" },
+        { "command": "dbStudio.openTableData", "when": "view == dbStudio.explorer && viewItem == table", "group": "inline" }
+      ]
+    },
+    "configuration": {
+      "title": "DB Studio",
+      "properties": {
+        "dbStudio.connections": {
+          "type": "array",
+          "default": [],
+          "description": "Saved database connections (passwords are stored separately in the OS secret storage).",
+          "items": {
+            "type": "object",
+            "required": ["name", "driver", "host", "user"],
+            "properties": {
+              "name": { "type": "string" },
+              "driver": { "type": "string", "enum": ["mysql", "postgres"] },
+              "host": { "type": "string" },
+              "port": { "type": "number" },
+              "user": { "type": "string" },
+              "database": { "type": "string" }
+            }
+          }
+        },
+        "dbStudio.rowLimit": {
+          "type": "number",
+          "default": 200,
+          "description": "Maximum number of rows fetched when opening table data."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "mysql2": "^3.11.0",
+    "pg": "^8.13.0"
+  }
+}
