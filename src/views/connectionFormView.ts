@@ -53,7 +53,26 @@ export class ConnectionFormView {
     }
     if (message.type === 'submit') {
       await this.save(message.connection, message.password);
+      return;
     }
+    if (message.type === 'test') {
+      await this.test(message.connection, message.password);
+    }
+  }
+
+  private async test(connection: ConnectionConfig, password: string): Promise<void> {
+    // Same rule as save: in edit mode a blank password means "use the stored one".
+    const useStored = this.editing !== null && password === '';
+    try {
+      await this.manager.testConnection(connection, useStored ? undefined : password);
+      this.postTestResult(true, 'Connection successful.');
+    } catch (error) {
+      this.postTestResult(false, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private postTestResult(ok: boolean, message: string): void {
+    this.panel?.webview.postMessage({ type: 'testResult', ok, message });
   }
 
   private async save(connection: ConnectionConfig, password: string): Promise<void> {
@@ -113,7 +132,9 @@ export class ConnectionFormView {
         <button type="button" id="clearColor">No color</button>
       </span>
     </label>
+    <div id="result" class="result"></div>
     <div class="actions">
+      <button type="button" id="test">Test</button>
       <button type="submit" id="save" class="primary">Save</button>
       <button type="button" id="cancel">Cancel</button>
     </div>

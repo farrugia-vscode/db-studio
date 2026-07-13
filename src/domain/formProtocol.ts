@@ -8,7 +8,14 @@ export interface FormInitMessage {
   connection: Partial<ConnectionConfig>;
 }
 
-export type ExtensionToForm = FormInitMessage;
+/** Result of a connection test, pushed back to the form. */
+export interface FormTestResultMessage {
+  type: 'testResult';
+  ok: boolean;
+  message: string;
+}
+
+export type ExtensionToForm = FormInitMessage | FormTestResultMessage;
 
 /** Messages sent from the connection form webview back to the extension host. */
 export interface FormReadyMessage {
@@ -26,4 +33,11 @@ export interface FormCancelMessage {
   type: 'cancel';
 }
 
-export type FormToExtension = FormReadyMessage | FormSubmitMessage | FormCancelMessage;
+export interface FormTestMessage {
+  type: 'test';
+  connection: ConnectionConfig;
+  /** Empty string in edit mode means "use the stored password". */
+  password: string;
+}
+
+export type FormToExtension = FormReadyMessage | FormSubmitMessage | FormCancelMessage | FormTestMessage;

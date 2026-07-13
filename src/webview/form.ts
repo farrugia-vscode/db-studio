@@ -23,6 +23,8 @@ const colorInput = byId<HTMLInputElement>('color');
 const swatches = byId<HTMLSpanElement>('swatches');
 const clearColorButton = byId<HTMLButtonElement>('clearColor');
 const cancelButton = byId<HTMLButtonElement>('cancel');
+const testButton = byId<HTMLButtonElement>('test');
+const result = byId<HTMLDivElement>('result');
 
 let useColor = true;
 
@@ -37,14 +39,21 @@ driverSelect.addEventListener('change', () => {
 colorInput.addEventListener('input', () => setUseColor(true));
 clearColorButton.addEventListener('click', () => setUseColor(false));
 cancelButton.addEventListener('click', () => api.postMessage({ type: 'cancel' }));
+testButton.addEventListener('click', test);
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   submit();
 });
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToForm>) => {
-  if (event.data.type === 'init') {
-    applyInit(event.data.isEdit, event.data.connection);
+  const message = event.data;
+  if (message.type === 'init') {
+    applyInit(message.isEdit, message.connection);
+    return;
+  }
+  if (message.type === 'testResult') {
+    showResult(message.ok ? 'ok' : 'error', message.message);
+    testButton.disabled = false;
   }
 });
 
@@ -68,8 +77,8 @@ function applyInit(isEdit: boolean, connection: Partial<ConnectionConfig>): void
   }
 }
 
-function submit(): void {
-  const connection: ConnectionConfig = {
+function readConnection(): ConnectionConfig {
+  return {
     name: nameInput.value.trim(),
     driver: driverSelect.value as DriverKind,
     host: hostInput.value.trim(),
@@ -78,7 +87,21 @@ function submit(): void {
     database: databaseInput.value.trim() || undefined,
     color: useColor ? colorInput.value : undefined,
   };
-  api.postMessage({ type: 'submit', connection, password: passwordInput.value });
+}
+
+function submit(): void {
+  api.postMessage({ type: 'submit', connection: readConnection(), password: passwordInput.value });
+}
+
+function test(): void {
+  testButton.disabled = true;
+  showResult('pending', 'Testing…');
+  api.postMessage({ type: 'test', connection: readConnection(), password: passwordInput.value });
+}
+
+function showResult(state: 'ok' | 'error' | 'pending', message: string): void {
+  result.textContent = message;
+  result.className = `result ${state}`;
 }
 
 function setUseColor(next: boolean): void {

@@ -93,6 +93,32 @@ input[type='color'] {
   border-color: var(--vscode-focusBorder);
 }
 
+.result {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  margin-top: 4px;
+}
+
+.result:empty {
+  display: none;
+}
+
+.result.pending {
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editorWidget-background);
+}
+
+.result.ok {
+  color: var(--vscode-testing-iconPassed, #4ec94e);
+  background: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ec94e) 12%, transparent);
+}
+
+.result.error {
+  color: var(--vscode-errorForeground);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 12%, transparent);
+}
+
 .actions {
   display: flex;
   gap: 8px;

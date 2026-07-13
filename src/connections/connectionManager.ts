@@ -45,6 +45,21 @@ export class ConnectionManager {
     await this.closeDriver(name);
   }
 
+  /**
+   * Opens a throwaway connection to validate the settings, then closes it.
+   * `password: undefined` falls back to the stored secret (edit mode). Rejects
+   * with the driver error, or a timeout, when the connection cannot be opened.
+   */
+  async testConnection(config: ConnectionConfig, password?: string): Promise<void> {
+    const resolved = password ?? (await this.context.secrets.get(SECRET_PREFIX + config.name)) ?? '';
+    const driver = this.driverFactory.make(config, resolved);
+    try {
+      await withTimeout(driver.connect(), 8000, 'Connection timed out after 8s');
+    } finally {
+      await driver.close().catch(() => undefined);
+    }
+  }
+
   async getDriver(name: string): Promise<DatabaseDriver> {
     const cached = this.drivers.get(name);
     if (cached) {
@@ -80,4 +95,12 @@ export class ConnectionManager {
       .getConfiguration('dbStudio')
       .update('connections', connections, vscode.ConfigurationTarget.Global);
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
