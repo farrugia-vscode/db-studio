@@ -10,7 +10,13 @@
   },
   "categories": ["Other"],
   "activationEvents": [],
-  "main": "./extension.js",
+  "main": "./out/extension.js",
+  "scripts": {
+    "build": "bun esbuild.ts",
+    "watch": "bun esbuild.ts --watch",
+    "check": "tsc -p . --noEmit && tsc -p src/webview --noEmit",
+    "vscode:prepublish": "bun run build"
+  },
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -95,5 +101,12 @@
   "dependencies": {
     "mysql2": "^3.11.0",
     "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.0"
   }
 }

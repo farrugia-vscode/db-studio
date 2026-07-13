@@ -1,0 +1,139 @@
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  padding: 0;
+  margin: 0;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.toolbar button {
+  cursor: pointer;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border: none;
+  padding: 3px 10px;
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.toolbar button.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+.toolbar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.toolbar #status {
+  margin-left: auto;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.notice {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.notice.error {
+  color: var(--vscode-errorForeground);
+}
+
+.notice:empty {
+  display: none;
+}
+
+#gridWrap {
+  overflow: auto;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+th,
+td {
+  border: 1px solid var(--vscode-panel-border);
+  padding: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  position: sticky;
+  top: 41px;
+  padding: 3px 8px;
+  background: var(--vscode-editorWidget-background);
+}
+
+th.pk::after {
+  content: ' 🔑';
+  font-size: 10px;
+}
+
+td input {
+  width: 100%;
+  min-width: 80px;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  padding: 3px 8px;
+  color: var(--vscode-foreground);
+  background: transparent;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+}
+
+td input:focus {
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+td input:read-only {
+  color: var(--vscode-descriptionForeground);
+}
+
+td input.null {
+  font-style: italic;
+  color: var(--vscode-descriptionForeground);
+}
+
+td.dirty {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(78, 201, 78, 0.15));
+}
+
+td.actions {
+  text-align: center;
+}
+
+td.actions button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font-size: 13px;
+  padding: 2px 6px;
+}
+
+tr.deleted td {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+tr.inserted td {
+  background: var(--vscode-diffEditor-insertedLineBackground, rgba(78, 201, 78, 0.08));
+}

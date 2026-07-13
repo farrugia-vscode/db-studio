@@ -1,22 +1,19 @@
-const vscode = require('vscode');
+import * as vscode from 'vscode';
+import type { QueryResult } from '../domain/types';
 
 /**
- * Renders query results as a read-only HTML grid inside a webview panel.
- * The editable grid is planned for a later iteration.
+ * Renders arbitrary query results as a read-only HTML grid. Editing a specific
+ * table is handled by the DataGridView instead.
  */
-class ResultsView {
-  constructor() {
-    this.panel = null;
-  }
+export class ResultsView {
+  private panel: vscode.WebviewPanel | null = null;
 
-  show(title, result) {
+  show(title: string, result: QueryResult): void {
     if (!this.panel) {
-      this.panel = vscode.window.createWebviewPanel(
-        'dbStudio.results',
-        title,
-        vscode.ViewColumn.Active,
-        { enableScripts: false, retainContextWhenHidden: true },
-      );
+      this.panel = vscode.window.createWebviewPanel('dbStudio.results', title, vscode.ViewColumn.Active, {
+        enableScripts: false,
+        retainContextWhenHidden: true,
+      });
       this.panel.onDidDispose(() => {
         this.panel = null;
       });
@@ -26,10 +23,9 @@ class ResultsView {
     this.panel.reveal();
   }
 
-  renderHtml(result) {
+  private renderHtml(result: QueryResult): string {
     if (result.columns.length === 0) {
-      const affected = result.affectedRows ?? 0;
-      return this.wrap(`<p class="empty">Query OK · ${affected} row(s) affected.</p>`);
+      return this.wrap(`<p class="empty">Query OK · ${result.affectedRows ?? 0} row(s) affected.</p>`);
     }
     const head = result.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('');
     const body = result.rows
@@ -39,11 +35,10 @@ class ResultsView {
       })
       .join('');
     const table = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
-    const summary = `<p class="summary">${result.rows.length} row(s)</p>`;
-    return this.wrap(summary + table);
+    return this.wrap(`<p class="summary">${result.rows.length} row(s)</p>${table}`);
   }
 
-  wrap(inner) {
+  private wrap(inner: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -55,7 +50,6 @@ class ResultsView {
   th, td { border: 1px solid var(--vscode-panel-border); padding: 3px 8px; text-align: left; white-space: nowrap; }
   th { position: sticky; top: 0; background: var(--vscode-editorWidget-background); }
   tr:nth-child(even) td { background: var(--vscode-list-hoverBackground); }
-  td.null { color: var(--vscode-descriptionForeground); font-style: italic; }
 </style>
 </head>
 <body>${inner}</body>
@@ -63,7 +57,7 @@ class ResultsView {
   }
 }
 
-function formatCell(value) {
+function formatCell(value: unknown): string {
   if (value === null || value === undefined) {
     return 'NULL';
   }
@@ -76,12 +70,6 @@ function formatCell(value) {
   return String(value);
 }
 
-function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-
-module.exports = { ResultsView };

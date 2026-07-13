@@ -1,36 +1,48 @@
-const vscode = require('vscode');
-const { ConnectionManager } = require('./src/connections/manager');
-const { SchemaTreeProvider } = require('./src/schemaTree');
-const { ResultsView } = require('./src/resultsView');
+import * as vscode from 'vscode';
+import { DriverFactory } from './drivers/driverFactory';
+import { ConnectionManager } from './connections/connectionManager';
+import { SchemaTreeProvider } from './views/schemaTreeProvider';
+import { ResultsView } from './views/resultsView';
+import { DataGridView } from './views/dataGridView';
+import { SchemaNode } from './views/schemaNode';
+import type { ConnectionConfig, DriverKind } from './domain/types';
 
-let manager;
-let treeProvider;
-let resultsView;
+let manager: ConnectionManager;
+let treeProvider: SchemaTreeProvider;
+let resultsView: ResultsView;
+let dataGridView: DataGridView;
 
-function activate(context) {
-  manager = new ConnectionManager(context);
+export function activate(context: vscode.ExtensionContext): void {
+  manager = new ConnectionManager(context, new DriverFactory());
   treeProvider = new SchemaTreeProvider(manager);
   resultsView = new ResultsView();
+  dataGridView = new DataGridView(context, manager);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('dbStudio.explorer', treeProvider),
-    vscode.commands.registerCommand('dbStudio.addConnection', addConnection),
-    vscode.commands.registerCommand('dbStudio.removeConnection', removeConnection),
+    vscode.commands.registerCommand('dbStudio.addConnection', () => addConnection()),
+    vscode.commands.registerCommand('dbStudio.removeConnection', (node?: SchemaNode) => removeConnection(node)),
     vscode.commands.registerCommand('dbStudio.refresh', () => treeProvider.refresh()),
-    vscode.commands.registerCommand('dbStudio.runQuery', runQuery),
-    vscode.commands.registerCommand('dbStudio.openTableData', openTableData),
+    vscode.commands.registerCommand('dbStudio.runQuery', (node?: SchemaNode) => runQuery(node)),
+    vscode.commands.registerCommand('dbStudio.openTableData', (node?: SchemaNode) => openTableData(node)),
   );
 }
 
-async function addConnection() {
+export async function deactivate(): Promise<void> {
+  if (manager) {
+    await manager.closeAll();
+  }
+}
+
+async function addConnection(): Promise<void> {
   const name = await vscode.window.showInputBox({ prompt: 'Connection name', ignoreFocusOut: true });
   if (!name) {
     return;
   }
   const driver = await vscode.window.showQuickPick(
     [
-      { label: 'MySQL / MariaDB', value: 'mysql' },
-      { label: 'PostgreSQL', value: 'postgres' },
+      { label: 'MySQL / MariaDB', value: 'mysql' as DriverKind },
+      { label: 'PostgreSQL', value: 'postgres' as DriverKind },
     ],
     { placeHolder: 'Driver', ignoreFocusOut: true },
   );
@@ -62,31 +74,25 @@ async function addConnection() {
     return;
   }
 
-  await manager.saveConnection(
-    {
-      name,
-      driver: driver.value,
-      host,
-      port: Number(portInput),
-      user,
-      database: database || undefined,
-    },
-    password,
-  );
+  const config: ConnectionConfig = {
+    name,
+    driver: driver.value,
+    host,
+    port: Number(portInput),
+    user,
+    database: database || undefined,
+  };
+  await manager.saveConnection(config, password);
   treeProvider.refresh();
   vscode.window.showInformationMessage(`Connection "${name}" saved.`);
 }
 
-async function removeConnection(node) {
+async function removeConnection(node?: SchemaNode): Promise<void> {
   const name = node ? node.connectionName : await pickConnectionName();
   if (!name) {
     return;
   }
-  const confirmed = await vscode.window.showWarningMessage(
-    `Remove connection "${name}"?`,
-    { modal: true },
-    'Remove',
-  );
+  const confirmed = await vscode.window.showWarningMessage(`Remove connection "${name}"?`, { modal: true }, 'Remove');
   if (confirmed !== 'Remove') {
     return;
   }
@@ -94,7 +100,7 @@ async function removeConnection(node) {
   treeProvider.refresh();
 }
 
-async function runQuery(node) {
+async function runQuery(node?: SchemaNode): Promise<void> {
   const name = node ? node.connectionName : await pickConnectionName();
   if (!name) {
     return;
@@ -103,30 +109,27 @@ async function runQuery(node) {
   if (!sql) {
     return;
   }
-  await execute(name, sql, `Query · ${name}`);
+  try {
+    const driver = await manager.getDriver(name);
+    const result = await driver.query(sql);
+    resultsView.show(`Query · ${name}`, result);
+  } catch (error) {
+    reportError(error);
+  }
 }
 
-async function openTableData(node) {
-  if (!node || node.kind !== 'table') {
+async function openTableData(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'table' || !node.namespace || !node.table) {
     return;
   }
-  const driver = await manager.getDriver(node.connectionName);
-  const limit = vscode.workspace.getConfiguration('dbStudio').get('rowLimit', 200);
-  const sql = `SELECT * FROM ${driver.buildTableRef(node.namespace, node.table)} LIMIT ${limit}`;
-  await execute(node.connectionName, sql, `${node.table} · ${node.connectionName}`);
+  await dataGridView.open({
+    connectionName: node.connectionName,
+    namespace: node.namespace,
+    table: node.table,
+  });
 }
 
-async function execute(connectionName, sql, title) {
-  try {
-    const driver = await manager.getDriver(connectionName);
-    const result = await driver.query(sql);
-    resultsView.show(title, result);
-  } catch (error) {
-    vscode.window.showErrorMessage(`DB Studio: ${error.message}`);
-  }
-}
-
-async function resolveSql() {
+async function resolveSql(): Promise<string | undefined> {
   const editor = vscode.window.activeTextEditor;
   if (editor && !editor.selection.isEmpty) {
     return editor.document.getText(editor.selection);
@@ -137,7 +140,7 @@ async function resolveSql() {
   return vscode.window.showInputBox({ prompt: 'SQL query', ignoreFocusOut: true });
 }
 
-async function pickConnectionName() {
+async function pickConnectionName(): Promise<string | undefined> {
   const names = manager.getConnections().map((connection) => connection.name);
   if (names.length === 0) {
     vscode.window.showWarningMessage('No connection configured. Run "DB Studio: Add Connection" first.');
@@ -149,10 +152,7 @@ async function pickConnectionName() {
   return vscode.window.showQuickPick(names, { placeHolder: 'Connection' });
 }
 
-async function deactivate() {
-  if (manager) {
-    await manager.closeAll();
-  }
+function reportError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  vscode.window.showErrorMessage(`DB Studio: ${message}`);
 }
-
-module.exports = { activate, deactivate };
