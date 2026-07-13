@@ -26,24 +26,23 @@ let colElements: HTMLTableColElement[] = [];
 
 const MIN_WIDTH = 56;
 const INITIAL_MAX_WIDTH = 360;
-const CELL_PADDING = 18;
+const CELL_PADDING = 26;
 const measureCtx = document.createElement('canvas').getContext('2d');
 let cellFont = '12px monospace';
 
 const grid = element<HTMLTableElement>('grid');
 const notice = element<HTMLDivElement>('notice');
 const status = element<HTMLSpanElement>('status');
-const addRowButton = element<HTMLButtonElement>('addRow');
 const commitButton = element<HTMLButtonElement>('commit');
 const reloadButton = element<HTMLButtonElement>('reload');
 
-addRowButton.addEventListener('click', addRow);
 commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
   if (message.type === 'data') {
+    applyColor(message.color);
     loadData(message.columns, message.pkColumns, message.rows);
     return;
   }
@@ -55,6 +54,11 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
 
 api.postMessage({ type: 'ready' });
 
+function applyColor(color?: string): void {
+  document.documentElement.style.setProperty('--conn', color ?? 'transparent');
+  document.body.classList.toggle('tinted', Boolean(color));
+}
+
 function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[]): void {
   columns = nextColumns;
   pkColumns = nextPkColumns;
@@ -62,15 +66,32 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
   rowModels = rows.map((row) => ({ values: toCellRow(row), original: toCellRow(row), deleted: false }));
   notice.classList.remove('error');
   notice.textContent = hasPrimaryKey ? '' : 'Read-only: this table has no primary key, rows cannot be edited safely.';
-  addRowButton.disabled = !hasPrimaryKey;
   render();
   refreshPending();
 }
 
 function render(): void {
   colElements = [];
-  grid.replaceChildren(buildColgroup(), buildHead(), buildBody());
+  grid.replaceChildren(buildColgroup(), buildHead(), buildBody(), buildFooter());
   autofitAll(INITIAL_MAX_WIDTH);
+}
+
+// A full-width "add row" affordance pinned under the data, Notion/Excel style.
+function buildFooter(): HTMLTableSectionElement {
+  const foot = document.createElement('tfoot');
+  const row = document.createElement('tr');
+  const cell = document.createElement('td');
+  cell.className = 'add-row';
+  cell.colSpan = columns.length + 1;
+  cell.textContent = '＋  Add row';
+  if (hasPrimaryKey) {
+    cell.addEventListener('click', addRow);
+  } else {
+    cell.classList.add('disabled');
+  }
+  row.appendChild(cell);
+  foot.appendChild(row);
+  return foot;
 }
 
 function buildColgroup(): HTMLTableColElement {

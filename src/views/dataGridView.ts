@@ -76,6 +76,7 @@ export class DataGridView {
         columns,
         pkColumns,
         rows: result.rows.map((row) => normalizeRow(row, columns)),
+        color: this.manager.getConnection(this.target.connectionName)?.color,
       });
     } catch (error) {
       this.reportError(error);
@@ -134,7 +135,6 @@ export class DataGridView {
 </head>
 <body>
   <div class="toolbar">
-    <button id="addRow">+ Row</button>
     <button id="commit" class="primary" disabled>Commit</button>
     <span id="status"></span>
     <button id="reload" title="Reload from the database (discards unsaved changes)">Reload</button>

@@ -75,7 +75,7 @@ async function runQuery(node?: SchemaNode): Promise<void> {
   try {
     const driver = await manager.getDriver(name);
     const result = await driver.query(sql);
-    resultsView.show(`Query · ${name}`, result);
+    resultsView.show(`Query · ${name}`, result, manager.getConnection(name)?.color);
   } catch (error) {
     reportError(error);
   }

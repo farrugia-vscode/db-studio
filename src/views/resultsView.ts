@@ -8,7 +8,7 @@ import type { QueryResult } from '../domain/types';
 export class ResultsView {
   private panel: vscode.WebviewPanel | null = null;
 
-  show(title: string, result: QueryResult): void {
+  show(title: string, result: QueryResult, color?: string): void {
     if (!this.panel) {
       this.panel = vscode.window.createWebviewPanel('dbStudio.results', title, vscode.ViewColumn.Active, {
         enableScripts: false,
@@ -19,13 +19,13 @@ export class ResultsView {
       });
     }
     this.panel.title = title;
-    this.panel.webview.html = this.renderHtml(result);
+    this.panel.webview.html = this.renderHtml(result, color);
     this.panel.reveal();
   }
 
-  private renderHtml(result: QueryResult): string {
+  private renderHtml(result: QueryResult, color?: string): string {
     if (result.columns.length === 0) {
-      return this.wrap(`<p class="empty">Query OK · ${result.affectedRows ?? 0} row(s) affected.</p>`);
+      return this.wrap(`<p class="summary">Query OK · ${result.affectedRows ?? 0} row(s) affected.</p>`, color);
     }
     const head = result.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('');
     const body = result.rows
@@ -35,24 +35,39 @@ export class ResultsView {
       })
       .join('');
     const table = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
-    return this.wrap(`<p class="summary">${result.rows.length} row(s)</p>${table}`);
+    return this.wrap(`<div class="summary">${result.rows.length} row(s)</div>${table}`, color);
   }
 
-  private wrap(inner: string): string {
+  private wrap(inner: string, color?: string): string {
+    const tint = color ? `--conn:${escapeHtml(color)};` : '';
+    const tinted = color ? ' class="tinted"' : '';
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
-  body { font-family: var(--vscode-editor-font-family); color: var(--vscode-foreground); padding: 8px; }
-  .summary, .empty { color: var(--vscode-descriptionForeground); margin: 4px 0 10px; }
-  table { border-collapse: collapse; width: 100%; font-size: 12px; }
-  th, td { border: 1px solid var(--vscode-panel-border); padding: 3px 8px; text-align: left; white-space: nowrap; }
-  th { position: sticky; top: 0; background: var(--vscode-editorWidget-background); }
-  tr:nth-child(even) td { background: var(--vscode-list-hoverBackground); }
+  :root { --conn: transparent; --cell-px: 12px; --cell-py: 7px; }
+  html, body { height: 100%; }
+  body { margin: 0; font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); }
+  body.tinted { background: color-mix(in srgb, var(--conn) 6%, var(--vscode-editor-background)); }
+  body.tinted::before { content: ''; display: block; height: 3px; background: var(--conn); }
+  .summary { color: var(--vscode-descriptionForeground); font-size: 12px; padding: 10px 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td {
+    border-bottom: 1px solid var(--vscode-panel-border);
+    border-right: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+    padding: var(--cell-py) var(--cell-px); text-align: left; white-space: nowrap;
+  }
+  th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--vscode-editorWidget-background); font-weight: 600; letter-spacing: 0.02em;
+  }
+  body.tinted th { background: color-mix(in srgb, var(--conn) 12%, var(--vscode-editorWidget-background)); }
+  tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--vscode-list-hoverBackground) 35%, transparent); }
+  tbody tr:hover td { background: var(--vscode-list-hoverBackground); }
 </style>
 </head>
-<body>${inner}</body>
+<body${tinted} style="${tint}">${inner}</body>
 </html>`;
   }
 }

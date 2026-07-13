@@ -8,6 +8,8 @@ export interface GridDataMessage {
   columns: ColumnMeta[];
   pkColumns: string[];
   rows: Row[];
+  /** The owning connection's color, tinting the grid window. */
+  color?: string;
 }
 
 export interface GridErrorMessage {

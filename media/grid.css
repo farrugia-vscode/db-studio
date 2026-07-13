@@ -1,20 +1,42 @@
-body {
-  font-family: var(--vscode-font-family);
-  color: var(--vscode-foreground);
-  padding: 0;
-  margin: 0;
+:root {
+  --cell-px: 12px;
+  --cell-py: 7px;
+  --conn: transparent;
 }
 
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+
+body.tinted {
+  background: color-mix(in srgb, var(--conn) 6%, var(--vscode-editor-background));
+}
+
+/* ---- Toolbar ---- */
 .toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 10px 16px;
   background: var(--vscode-editorWidget-background);
   border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+body.tinted .toolbar {
+  background: color-mix(in srgb, var(--conn) 10%, var(--vscode-editorWidget-background));
+  border-top: 3px solid var(--conn);
+  border-bottom-color: color-mix(in srgb, var(--conn) 35%, var(--vscode-panel-border));
 }
 
 .toolbar button {
@@ -22,9 +44,13 @@ body {
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);
   border: none;
-  padding: 4px 14px;
-  border-radius: 2px;
+  padding: 5px 16px;
+  border-radius: 4px;
   font-size: 12px;
+}
+
+.toolbar button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
 }
 
 .toolbar button.primary {
@@ -32,8 +58,12 @@ body {
   background: var(--vscode-button-background);
 }
 
+.toolbar button.primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
 .toolbar button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -44,8 +74,10 @@ body {
   font-size: 12px;
 }
 
+/* ---- Notice ---- */
 .notice {
-  padding: 4px 8px;
+  flex: 0 0 auto;
+  padding: 6px 16px;
   font-size: 12px;
   color: var(--vscode-descriptionForeground);
 }
@@ -58,23 +90,45 @@ body {
   display: none;
 }
 
+/* ---- Grid ---- */
 #gridWrap {
+  flex: 1 1 auto;
   overflow: auto;
 }
 
 table {
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 th,
 td {
-  border: 1px solid var(--vscode-panel-border);
-  padding: 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
+  padding: 0;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--cell-py) var(--cell-px);
+  background: var(--vscode-editorWidget-background);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+body.tinted th {
+  background: color-mix(in srgb, var(--conn) 12%, var(--vscode-editorWidget-background));
+}
+
+th.pk::after {
+  content: ' 🔑';
+  font-size: 10px;
 }
 
 .col-resizer {
@@ -89,78 +143,55 @@ td {
 
 .col-resizer:hover {
   background: var(--vscode-focusBorder);
-  opacity: 0.5;
-}
-
-body.resizing {
-  cursor: col-resize;
-  user-select: none;
-}
-
-body.resizing input {
-  pointer-events: none;
-}
-
-th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 3px 8px;
-  background: var(--vscode-editorWidget-background);
-}
-
-th.pk::after {
-  content: ' 🔑';
-  font-size: 10px;
+  opacity: 0.6;
 }
 
 td input {
   width: 100%;
-  min-width: 80px;
   box-sizing: border-box;
   border: none;
   outline: none;
-  padding: 3px 8px;
-  color: var(--vscode-foreground);
   background: transparent;
+  padding: var(--cell-py) var(--cell-px);
+  color: var(--vscode-foreground);
   font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 td input:focus {
   background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
 }
 
 td input:read-only {
   color: var(--vscode-descriptionForeground);
 }
 
-td input.null {
+td input.null,
+td input.generated {
   font-style: italic;
   color: var(--vscode-descriptionForeground);
 }
 
 td input.generated {
-  font-style: italic;
-  color: var(--vscode-descriptionForeground);
   opacity: 0.7;
 }
 
+/* ---- Rows ---- */
+tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 35%, transparent);
+}
+
+tbody tr:hover td {
+  background: var(--vscode-list-hoverBackground);
+}
+
 td.dirty {
-  background: var(--vscode-diffEditor-insertedTextBackground, rgba(78, 201, 78, 0.15));
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(78, 201, 78, 0.18)) !important;
 }
 
-td.actions {
-  text-align: center;
-}
-
-td.actions button {
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  color: var(--vscode-descriptionForeground);
-  font-size: 13px;
-  padding: 2px 6px;
+tr.inserted td {
+  background: color-mix(in srgb, var(--vscode-charts-green, #4ec94e) 8%, transparent) !important;
 }
 
 tr.deleted td {
@@ -168,6 +199,60 @@ tr.deleted td {
   opacity: 0.5;
 }
 
-tr.inserted td {
-  background: var(--vscode-diffEditor-insertedLineBackground, rgba(78, 201, 78, 0.08));
+td.actions {
+  text-align: center;
+  overflow: visible;
+}
+
+td.actions button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font-size: 14px;
+  padding: 2px 6px;
+  opacity: 0.5;
+}
+
+tr:hover td.actions button {
+  opacity: 1;
+}
+
+td.actions button:hover {
+  color: var(--vscode-errorForeground);
+}
+
+/* ---- Add-row footer ---- */
+tfoot td.add-row {
+  border-right: none;
+  padding: var(--cell-py) var(--cell-px);
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+}
+
+tfoot td.add-row:hover {
+  color: var(--vscode-foreground);
+  background: var(--vscode-list-hoverBackground);
+}
+
+tfoot td.add-row.disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+tfoot td.add-row.disabled:hover {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ---- While dragging a column edge ---- */
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.resizing input {
+  pointer-events: none;
 }
