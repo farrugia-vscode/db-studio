@@ -6,7 +6,7 @@
   var DEFAULT_PORTS = { mysql: "3306", postgres: "5432" };
   var form = byId("form");
   var nameInput = byId("name");
-  var driverSelect = byId("driver");
+  var driverPicker = byId("driverPicker");
   var hostInput = byId("host");
   var portInput = byId("port");
   var userInput = byId("user");
@@ -19,12 +19,11 @@
   var testButton = byId("test");
   var result = byId("result");
   var useColor = true;
+  var selectedDriver = "mysql";
   buildSwatches();
-  driverSelect.addEventListener("change", () => {
-    if (portInput.value === "") {
-      portInput.value = DEFAULT_PORTS[driverSelect.value];
-    }
-  });
+  for (const button of driverPicker.querySelectorAll(".driver-option")) {
+    button.addEventListener("click", () => setDriver(button.dataset.driver));
+  }
   colorInput.addEventListener("input", () => setUseColor(true));
   clearColorButton.addEventListener("click", () => setUseColor(false));
   cancelButton.addEventListener("click", () => api.postMessage({ type: "cancel" }));
@@ -47,10 +46,9 @@
   api.postMessage({ type: "ready" });
   function applyInit(isEdit, connection) {
     nameInput.value = connection.name ?? "";
-    nameInput.readOnly = isEdit;
-    driverSelect.value = connection.driver ?? "mysql";
+    setDriver(connection.driver ?? "mysql");
     hostInput.value = connection.host ?? "127.0.0.1";
-    portInput.value = connection.port !== void 0 ? String(connection.port) : DEFAULT_PORTS[driverSelect.value];
+    portInput.value = connection.port !== void 0 ? String(connection.port) : DEFAULT_PORTS[selectedDriver];
     userInput.value = connection.user ?? "";
     databaseInput.value = connection.database ?? "";
     passwordInput.value = "";
@@ -65,7 +63,7 @@
   function readConnection() {
     return {
       name: nameInput.value.trim(),
-      driver: driverSelect.value,
+      driver: selectedDriver,
       host: hostInput.value.trim(),
       port: portInput.value ? Number(portInput.value) : void 0,
       user: userInput.value.trim(),
@@ -89,6 +87,15 @@
     useColor = next;
     colorInput.style.opacity = next ? "1" : "0.35";
     clearColorButton.classList.toggle("active", !next);
+  }
+  function setDriver(driver) {
+    selectedDriver = driver;
+    for (const button of driverPicker.querySelectorAll(".driver-option")) {
+      button.classList.toggle("active", button.dataset.driver === driver);
+    }
+    if (portInput.value === "") {
+      portInput.value = DEFAULT_PORTS[driver];
+    }
   }
   function buildSwatches() {
     for (const color of SWATCHES) {

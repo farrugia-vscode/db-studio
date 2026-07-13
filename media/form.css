@@ -38,6 +38,35 @@ input:read-only {
   opacity: 0.6;
 }
 
+.driver-picker {
+  display: flex;
+  gap: 8px;
+}
+
+.driver-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-foreground);
+  font-size: 13px;
+}
+
+.driver-option .ico {
+  font-size: 16px;
+}
+
+.driver-option.active {
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 12%, var(--vscode-input-background));
+}
+
 .row {
   display: flex;
   gap: 12px;

@@ -38,6 +38,18 @@ export class ConnectionManager {
     await this.closeDriver(config.name);
   }
 
+  /**
+   * Renames a connection: writes the new config (carrying over the stored
+   * password when `password` is undefined) and drops the old entry + secret.
+   */
+  async renameConnection(oldName: string, config: ConnectionConfig, password?: string): Promise<void> {
+    const resolved = password ?? (await this.context.secrets.get(SECRET_PREFIX + oldName)) ?? '';
+    await this.saveConnection(config, resolved);
+    if (oldName !== config.name) {
+      await this.removeConnection(oldName);
+    }
+  }
+
   async removeConnection(name: string): Promise<void> {
     const connections = this.getConnections().filter((connection) => connection.name !== name);
     await this.writeConnections(connections);

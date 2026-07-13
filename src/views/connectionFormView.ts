@@ -76,10 +76,22 @@ export class ConnectionFormView {
   }
 
   private async save(connection: ConnectionConfig, password: string): Promise<void> {
+    const editingName = this.editing?.name ?? null;
+    // Block silently clobbering a different existing connection with this name.
+    const clash = this.manager.getConnection(connection.name);
+    if (clash && connection.name !== editingName) {
+      this.postTestResult(false, `A connection named "${connection.name}" already exists.`);
+      return;
+    }
     // Edit mode + blank password → keep the stored secret; add mode always stores what was typed.
     const keepStored = this.editing !== null && password === '';
+    const resolvedPassword = keepStored ? undefined : password;
     try {
-      await this.manager.saveConnection(connection, keepStored ? undefined : password);
+      if (editingName !== null && editingName !== connection.name) {
+        await this.manager.renameConnection(editingName, connection, resolvedPassword);
+      } else {
+        await this.manager.saveConnection(connection, resolvedPassword);
+      }
       this.onSaved();
       this.panel?.dispose();
       vscode.window.showInformationMessage(`Connection "${connection.name}" saved.`);
@@ -113,10 +125,10 @@ export class ConnectionFormView {
   <form id="form" autocomplete="off">
     <label>Name<input id="name" required></label>
     <label>Driver
-      <select id="driver">
-        <option value="mysql">MySQL / MariaDB</option>
-        <option value="postgres">PostgreSQL</option>
-      </select>
+      <div class="driver-picker" id="driverPicker">
+        <button type="button" class="driver-option" data-driver="mysql"><span class="ico">🐬</span> MySQL / MariaDB</button>
+        <button type="button" class="driver-option" data-driver="postgres"><span class="ico">🐘</span> PostgreSQL</button>
+      </div>
     </label>
     <div class="row">
       <label class="grow">Host<input id="host" value="127.0.0.1" required></label>
