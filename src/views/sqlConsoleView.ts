@@ -3,7 +3,9 @@ import { ConnectionManager } from '../connections/connectionManager';
 import type { ExtensionToConsole, ConsoleToExtension } from '../domain/consoleProtocol';
 
 const STORAGE_PREFIX = 'dbStudio.console.';
+const HISTORY_PREFIX = 'dbStudio.history.';
 const MAX_AUTOCOMPLETE_TABLES = 300;
+const MAX_HISTORY = 50;
 
 /**
  * A per-connection SQL console: a full editor whose content is auto-saved to
@@ -44,6 +46,7 @@ export class SqlConsoleView {
     if (message.type === 'ready') {
       const sql = this.context.globalState.get<string>(STORAGE_PREFIX + connectionName, '');
       this.post(panel, { type: 'init', sql });
+      this.post(panel, { type: 'history', items: this.loadHistory(connectionName) });
       void this.sendSchema(connectionName, panel);
       return;
     }
@@ -63,6 +66,7 @@ export class SqlConsoleView {
     try {
       const driver = await this.manager.getDriver(connectionName);
       const result = await driver.query(sql);
+      await this.pushHistory(connectionName, panel, sql);
       this.post(panel, {
         type: 'result',
         columns: result.columns,
@@ -77,6 +81,23 @@ export class SqlConsoleView {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  private loadHistory(connectionName: string): string[] {
+    return this.context.globalState.get<string[]>(HISTORY_PREFIX + connectionName, []);
+  }
+
+  /** Prepend a successfully run query to the connection's history (newest first, deduped). */
+  private async pushHistory(connectionName: string, panel: vscode.WebviewPanel, sql: string): Promise<void> {
+    const trimmed = sql.trim();
+    if (trimmed === '') {
+      return;
+    }
+    const history = this.loadHistory(connectionName).filter((entry) => entry !== trimmed);
+    history.unshift(trimmed);
+    const capped = history.slice(0, MAX_HISTORY);
+    await this.context.globalState.update(HISTORY_PREFIX + connectionName, capped);
+    this.post(panel, { type: 'history', items: capped });
   }
 
   /** Snapshot the default database's tables and columns so the editor can autocomplete. */
@@ -121,12 +142,17 @@ export class SqlConsoleView {
 <body>
   <div class="toolbar">
     <button id="run" class="primary">Run ▷</button>
+    <button id="historyToggle" title="Recent queries">History ⌄</button>
     <span class="hint">Ctrl+Enter — run selection, or the whole script</span>
     <span id="status"></span>
   </div>
   <div id="editorWrap">
     <textarea id="editor" spellcheck="false" placeholder="SELECT * FROM …"></textarea>
     <ul id="autocomplete" class="autocomplete" hidden></ul>
+    <div id="historyPanel" class="history" hidden>
+      <div class="history-head">Recent queries<span id="historyEmpty" class="history-empty" hidden>— none yet</span></div>
+      <ul id="historyList"></ul>
+    </div>
   </div>
   <div id="resultWrap"><table id="result"></table></div>
   <script nonce="${nonce}" src="${scriptUri}"></script>

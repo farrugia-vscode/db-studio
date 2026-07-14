@@ -12,6 +12,10 @@ const runButton = byId<HTMLButtonElement>('run');
 const status = byId<HTMLSpanElement>('status');
 const resultTable = byId<HTMLTableElement>('result');
 const acList = byId<HTMLUListElement>('autocomplete');
+const historyToggle = byId<HTMLButtonElement>('historyToggle');
+const historyPanel = byId<HTMLDivElement>('historyPanel');
+const historyList = byId<HTMLUListElement>('historyList');
+const historyEmpty = byId<HTMLSpanElement>('historyEmpty');
 
 // Common SQL keywords offered by autocomplete alongside the schema.
 const KEYWORDS = [
@@ -35,11 +39,13 @@ let tokenStart = 0;
 let saveTimer = 0;
 
 runButton.addEventListener('click', run);
+historyToggle.addEventListener('click', toggleHistory);
 editor.addEventListener('input', () => {
   scheduleSave();
   updateAutocomplete();
 });
 editor.addEventListener('keydown', onEditorKeydown);
+editor.addEventListener('mousedown', () => { historyPanel.hidden = true; });
 editor.addEventListener('blur', () => window.setTimeout(closeAutocomplete, 120));
 editor.addEventListener('scroll', closeAutocomplete);
 
@@ -52,6 +58,10 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToConsole>) => 
   if (message.type === 'schema') {
     schema = message.tables;
     columnsByTable = new Map(schema.map((table) => [table.name.toLowerCase(), table.columns]));
+    return;
+  }
+  if (message.type === 'history') {
+    renderHistory(message.items);
     return;
   }
   if (message.type === 'result') {
@@ -261,6 +271,35 @@ function caretCoordinates(field: HTMLTextAreaElement, position: number): { left:
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ---- Query history ----
+
+function toggleHistory(): void {
+  historyPanel.hidden = !historyPanel.hidden;
+}
+
+function renderHistory(items: string[]): void {
+  historyList.replaceChildren();
+  historyEmpty.hidden = items.length > 0;
+  for (const sql of items) {
+    const item = document.createElement('li');
+    item.textContent = sql;
+    item.title = sql;
+    item.addEventListener('click', () => applyHistory(sql));
+    historyList.appendChild(item);
+  }
+}
+
+// Replace the current selection (or insert at the caret) with the chosen past query.
+function applyHistory(sql: string): void {
+  const start = editor.selectionStart;
+  const end = editor.selectionEnd;
+  editor.value = editor.value.slice(0, start) + sql + editor.value.slice(end);
+  editor.selectionStart = editor.selectionEnd = start + sql.length;
+  historyPanel.hidden = true;
+  editor.focus();
+  scheduleSave();
 }
 
 // ---- Query execution & results ----

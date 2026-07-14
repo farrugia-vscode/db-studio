@@ -7,6 +7,10 @@
   var status = byId("status");
   var resultTable = byId("result");
   var acList = byId("autocomplete");
+  var historyToggle = byId("historyToggle");
+  var historyPanel = byId("historyPanel");
+  var historyList = byId("historyList");
+  var historyEmpty = byId("historyEmpty");
   var KEYWORDS = [
     "SELECT",
     "FROM",
@@ -53,11 +57,15 @@
   var tokenStart = 0;
   var saveTimer = 0;
   runButton.addEventListener("click", run);
+  historyToggle.addEventListener("click", toggleHistory);
   editor.addEventListener("input", () => {
     scheduleSave();
     updateAutocomplete();
   });
   editor.addEventListener("keydown", onEditorKeydown);
+  editor.addEventListener("mousedown", () => {
+    historyPanel.hidden = true;
+  });
   editor.addEventListener("blur", () => window.setTimeout(closeAutocomplete, 120));
   editor.addEventListener("scroll", closeAutocomplete);
   window.addEventListener("message", (event) => {
@@ -69,6 +77,10 @@
     if (message.type === "schema") {
       schema = message.tables;
       columnsByTable = new Map(schema.map((table) => [table.name.toLowerCase(), table.columns]));
+      return;
+    }
+    if (message.type === "history") {
+      renderHistory(message.items);
       return;
     }
     if (message.type === "result") {
@@ -259,6 +271,29 @@
   }
   function escapeRegExp(text) {
     return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  function toggleHistory() {
+    historyPanel.hidden = !historyPanel.hidden;
+  }
+  function renderHistory(items) {
+    historyList.replaceChildren();
+    historyEmpty.hidden = items.length > 0;
+    for (const sql of items) {
+      const item = document.createElement("li");
+      item.textContent = sql;
+      item.title = sql;
+      item.addEventListener("click", () => applyHistory(sql));
+      historyList.appendChild(item);
+    }
+  }
+  function applyHistory(sql) {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = editor.value.slice(0, start) + sql + editor.value.slice(end);
+    editor.selectionStart = editor.selectionEnd = start + sql.length;
+    historyPanel.hidden = true;
+    editor.focus();
+    scheduleSave();
   }
   function run() {
     const selection = editor.value.slice(editor.selectionStart, editor.selectionEnd);

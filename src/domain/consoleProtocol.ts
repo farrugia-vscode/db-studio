@@ -24,7 +24,17 @@ export interface ConsoleSchemaMessage {
   tables: ConsoleTableSchema[];
 }
 
-export type ExtensionToConsole = ConsoleInitMessage | ConsoleResultMessage | ConsoleSchemaMessage;
+/** Recently run queries for this connection, newest first. */
+export interface ConsoleHistoryMessage {
+  type: 'history';
+  items: string[];
+}
+
+export type ExtensionToConsole =
+  | ConsoleInitMessage
+  | ConsoleResultMessage
+  | ConsoleSchemaMessage
+  | ConsoleHistoryMessage;
 
 /** Messages from the SQL console webview back to the extension host. */
 export interface ConsoleReadyMessage {
