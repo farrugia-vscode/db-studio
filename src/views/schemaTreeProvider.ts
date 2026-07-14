@@ -48,7 +48,7 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
       connections.map(async (connection) => {
         const node = new SchemaNode('connection', connection.name, Collapsed, connection.name);
         node.description = `${connection.driver} · ${connection.host}`;
-        node.iconPath = await this.icons.iconFor(connection.color);
+        node.iconPath = await this.icons.connectionIcon(connection.color);
         return node;
       }),
     );
@@ -67,9 +67,11 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
   private async buildTableNodes(parent: SchemaNode): Promise<SchemaNode[]> {
     const driver = await this.manager.getDriver(parent.connectionName);
     const tables = await driver.listTables(parent.namespace!);
+    const color = this.manager.getConnection(parent.connectionName)?.color;
+    const tableIcon = await this.icons.tableIcon(color);
     return tables.map((table) => {
       const node = new SchemaNode('table', table, Collapsed, parent.connectionName, parent.namespace, table);
-      node.iconPath = new vscode.ThemeIcon('table');
+      node.iconPath = tableIcon;
       // Open the data grid when the table row is activated (honors the user's single/double-click mode).
       node.command = { command: 'dbStudio.openTableData', title: 'Open Table Data', arguments: [node] };
       return node;
