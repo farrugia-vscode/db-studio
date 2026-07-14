@@ -91,6 +91,41 @@ export class PostgresDriver implements DatabaseDriver {
     }));
   }
 
+  async getTableDdl(namespace: string, table: string): Promise<string> {
+    await this.connect();
+    const result = await this.client!.query<{
+      column_name: string;
+      data_type: string;
+      character_maximum_length: number | null;
+      is_nullable: string;
+      column_default: string | null;
+    }>(
+      `SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
+       FROM information_schema.columns
+       WHERE table_schema = $1 AND table_name = $2
+       ORDER BY ordinal_position`,
+      [namespace, table],
+    );
+    const columns = await this.listColumns(namespace, table);
+    const pkColumns = columns.filter((column) => column.isPrimaryKey).map((column) => column.name);
+
+    const lines = result.rows.map((row) => {
+      const type = row.character_maximum_length ? `${row.data_type}(${row.character_maximum_length})` : row.data_type;
+      let line = `  ${this.quoteIdentifier(row.column_name)} ${type}`;
+      if (row.is_nullable === 'NO') {
+        line += ' NOT NULL';
+      }
+      if (row.column_default) {
+        line += ` DEFAULT ${row.column_default}`;
+      }
+      return line;
+    });
+    if (pkColumns.length > 0) {
+      lines.push(`  PRIMARY KEY (${pkColumns.map((column) => this.quoteIdentifier(column)).join(', ')})`);
+    }
+    return `CREATE TABLE ${this.buildTableRef(namespace, table)} (\n${lines.join(',\n')}\n);`;
+  }
+
   quoteIdentifier(identifier: string): string {
     return '"' + identifier.replace(/"/g, '""') + '"';
   }

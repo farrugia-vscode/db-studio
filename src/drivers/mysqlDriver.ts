@@ -70,6 +70,12 @@ export class MysqlDriver implements DatabaseDriver {
     }));
   }
 
+  async getTableDdl(namespace: string, table: string): Promise<string> {
+    const rows = await this.select(`SHOW CREATE TABLE ${this.buildTableRef(namespace, table)}`);
+    const row = rows[0];
+    return row ? String(row['Create Table'] ?? row['Create View'] ?? '') : '';
+  }
+
   quoteIdentifier(identifier: string): string {
     return '`' + identifier.replace(/`/g, '``') + '`';
   }

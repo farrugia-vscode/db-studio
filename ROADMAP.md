@@ -17,6 +17,7 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] connection → database/schema → table → columns (PK, type, nullability)
 - [x] Colored connection icon
 - [x] Double-click a table → open its data
+- [x] Show table DDL (right-click → Show DDL)
 - [ ] Select which databases/schemas to display per connection
 - [ ] Show indexes, foreign keys, views
 - [ ] Filter/search the tree

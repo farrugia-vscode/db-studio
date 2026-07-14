@@ -16,6 +16,8 @@ export interface SchemaIntrospector {
   listNamespaces(): Promise<string[]>;
   listTables(namespace: string): Promise<string[]>;
   listColumns(namespace: string, table: string): Promise<ColumnMeta[]>;
+  /** The CREATE TABLE statement for a table. */
+  getTableDdl(namespace: string, table: string): Promise<string>;
 }
 
 export interface StatementExecutor {

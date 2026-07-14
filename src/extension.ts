@@ -32,6 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.refresh', () => treeProvider.refresh()),
     vscode.commands.registerCommand('dbStudio.runQuery', (node?: SchemaNode) => runQuery(node)),
     vscode.commands.registerCommand('dbStudio.openTableData', (node?: SchemaNode) => openTableData(node)),
+    vscode.commands.registerCommand('dbStudio.showTableDdl', (node?: SchemaNode) => showTableDdl(node)),
   );
 }
 
@@ -93,6 +94,20 @@ async function openTableData(node?: SchemaNode): Promise<void> {
     namespace: node.namespace,
     table: node.table,
   });
+}
+
+async function showTableDdl(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'table' || !node.namespace || !node.table) {
+    return;
+  }
+  try {
+    const driver = await manager.getDriver(node.connectionName);
+    const ddl = await driver.getTableDdl(node.namespace, node.table);
+    const document = await vscode.workspace.openTextDocument({ content: ddl, language: 'sql' });
+    await vscode.window.showTextDocument(document, { preview: true });
+  } catch (error) {
+    reportError(error);
+  }
 }
 
 async function resolveSql(): Promise<string | undefined> {
