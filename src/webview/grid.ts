@@ -65,7 +65,8 @@ pageSizeInput.addEventListener('change', () => {
 
 const jsonModal = element<HTMLDivElement>('jsonModal');
 const jsonModalText = element<HTMLTextAreaElement>('jsonModalText');
-const jsonModalError = element<HTMLDivElement>('jsonModalError');
+const jsonStatus = element<HTMLSpanElement>('jsonStatus');
+const jsonFormat = element<HTMLButtonElement>('jsonFormat');
 const jsonModalSave = element<HTMLButtonElement>('jsonModalSave');
 const jsonModalCancel = element<HTMLButtonElement>('jsonModalCancel');
 
@@ -73,6 +74,8 @@ let jsonTarget: { model: RowModel; column: ColumnMeta; input: HTMLInputElement; 
 
 jsonModalSave.addEventListener('click', saveJsonModal);
 jsonModalCancel.addEventListener('click', closeJsonModal);
+jsonFormat.addEventListener('click', formatJsonModal);
+jsonModalText.addEventListener('input', validateJsonModal);
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
@@ -321,8 +324,17 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   const cell = document.createElement('td');
   const input = document.createElement('input');
   const isJson = editable && column.type.toLowerCase().includes('json');
+  const dateType = editable && !isJson ? dateInputType(column.type) : null;
   const value = model.values[column.name];
-  input.value = value ?? '';
+  if (dateType) {
+    input.type = dateType;
+    if (dateType === 'datetime-local') {
+      input.step = '1';
+    }
+    input.value = toDateInputValue(value, dateType);
+  } else {
+    input.value = value ?? '';
+  }
   // Excel-like: cells are in display mode; a double-click starts editing.
   input.readOnly = true;
   if (isGenerated) {
@@ -335,7 +347,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     }
   }
   input.addEventListener('input', () => {
-    model.values[column.name] = readInput(input, column);
+    model.values[column.name] = dateType ? fromDateInputValue(input, column, dateType) : readInput(input, column);
     input.classList.toggle('null', model.values[column.name] === null);
     applyCellState(cell, model, column);
     refreshPending();
@@ -355,7 +367,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
       if (event.key === 'Enter') {
         input.blur();
       } else if (event.key === 'Escape') {
-        input.value = value ?? '';
+        input.value = dateType ? toDateInputValue(value, dateType) : value ?? '';
         model.values[column.name] = value;
         applyCellState(cell, model, column);
         refreshPending();
@@ -372,6 +384,35 @@ function beginInlineEdit(input: HTMLInputElement): void {
   input.readOnly = false;
   input.focus();
   input.select();
+}
+
+function dateInputType(type: string): 'date' | 'datetime-local' | null {
+  const normalized = type.toLowerCase();
+  if (normalized === 'date') {
+    return 'date';
+  }
+  if (normalized.includes('timestamp') || normalized.includes('datetime')) {
+    return 'datetime-local';
+  }
+  return null;
+}
+
+function toDateInputValue(value: CellValue, dateType: 'date' | 'datetime-local'): string {
+  if (value === null) {
+    return '';
+  }
+  if (dateType === 'date') {
+    return value.slice(0, 10);
+  }
+  // Normalize 'YYYY-MM-DD HH:MM:SS' or ISO into the datetime-local format.
+  return value.replace('T', ' ').slice(0, 19).replace(' ', 'T');
+}
+
+function fromDateInputValue(input: HTMLInputElement, column: ColumnMeta, dateType: 'date' | 'datetime-local'): CellValue {
+  if (input.value === '') {
+    return column.isNullable ? null : '';
+  }
+  return dateType === 'date' ? input.value : input.value.replace('T', ' ');
 }
 
 // Parses `enum('a','b','c')` (MySQL) into its allowed values, or null if not an enum.
@@ -414,8 +455,8 @@ function openJsonModal(
 ): void {
   jsonTarget = { model, column, input, cell };
   jsonModalText.value = prettyJson(model.values[column.name]);
-  jsonModalError.textContent = '';
   jsonModal.hidden = false;
+  validateJsonModal();
   jsonModalText.focus();
 }
 
@@ -430,19 +471,46 @@ function prettyJson(value: string | null): string {
   }
 }
 
-function saveJsonModal(): void {
-  if (!jsonTarget) {
-    return;
+// Live validity: runs on every keystroke, colors the status and gates Save.
+function validateJsonModal(): boolean {
+  const text = jsonModalText.value.trim();
+  if (text === '') {
+    jsonStatus.textContent = 'empty → NULL';
+    jsonStatus.className = 'json-status';
+    jsonModalSave.disabled = false;
+    return true;
   }
+  try {
+    JSON.parse(text);
+    jsonStatus.textContent = '● Valid JSON';
+    jsonStatus.className = 'json-status ok';
+    jsonModalSave.disabled = false;
+    return true;
+  } catch (error) {
+    jsonStatus.textContent = `● ${(error as Error).message}`;
+    jsonStatus.className = 'json-status error';
+    jsonModalSave.disabled = true;
+    return false;
+  }
+}
+
+function formatJsonModal(): void {
   const text = jsonModalText.value.trim();
   if (text !== '') {
     try {
-      JSON.parse(text);
-    } catch (error) {
-      jsonModalError.textContent = `Invalid JSON: ${(error as Error).message}`;
-      return;
+      jsonModalText.value = JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      // Invalid JSON — leave the text untouched; the status already flags it.
     }
   }
+  validateJsonModal();
+}
+
+function saveJsonModal(): void {
+  if (!jsonTarget || !validateJsonModal()) {
+    return;
+  }
+  const text = jsonModalText.value.trim();
   const { model, column, input, cell } = jsonTarget;
   const next = text === '' ? (column.isNullable ? null : '') : JSON.stringify(JSON.parse(text));
   model.values[column.name] = next;
