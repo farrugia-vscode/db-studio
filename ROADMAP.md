@@ -21,9 +21,10 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Drop / empty table (right-click, modal confirmation)
 - [x] Table designer: create & modify tables (visual columns → CREATE / ALTER, preview + confirm)
 - [x] Indexes, unique constraints and foreign keys in the designer
+- [x] Views, procedures, functions, triggers, sequences (grouped folders, per non-empty family)
+- [x] Views open their data; routines/triggers/sequences show read-only DDL
 - [ ] Select which databases/schemas to display per connection
 - [ ] Show / hide columns in the data grid
-- [ ] Show indexes, foreign keys, views
 - [ ] Filter/search the tree
 
 ## Data grid
@@ -42,15 +43,16 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Enum columns edited via a dropdown
 - [x] Date columns: locale-formatted display (`dbStudio.dateLocale`), raw ISO editing
 - [x] Columns auto-fit to content on load, capped at a max width
-- [ ] Multi-cell selection & fill (Excel-style) — to spec later
+- [x] Sort by column (click header → ASC / DESC / none, server-side)
+- [x] Excel-like rectangular selection (mouse + Shift), fill-down (Ctrl+D), paste (Ctrl+V)
+- [x] Format-aware copy (Ctrl+C → TSV / CSV / JSON / INSERT, chosen in the toolbar)
+- [x] Undo / redo of cell & row edits (Ctrl+Z / Ctrl+Y)
 - [ ] Hide / show columns
-- [ ] Sort by column (click header)
-- [ ] Copy cell / row, export selection
 
 ## SQL
 - [x] Run SQL from selection / active `.sql` file / prompt → results grid (tinted)
-- [ ] Full SQL console window (editor pane, not a tiny input)
-- [ ] Schema-aware autocompletion
+- [x] Full SQL console window (per-connection, auto-saved editor, Ctrl+Enter run)
+- [x] Schema-aware autocompletion (tables, columns, keywords; alias-aware `.` columns)
 - [ ] Query history
 
 ## Import / export
