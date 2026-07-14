@@ -3,6 +3,7 @@ import { ConnectionManager } from '../connections/connectionManager';
 import type { ExtensionToConsole, ConsoleToExtension } from '../domain/consoleProtocol';
 
 const STORAGE_PREFIX = 'dbStudio.console.';
+const MAX_AUTOCOMPLETE_TABLES = 300;
 
 /**
  * A per-connection SQL console: a full editor whose content is auto-saved to
@@ -43,6 +44,7 @@ export class SqlConsoleView {
     if (message.type === 'ready') {
       const sql = this.context.globalState.get<string>(STORAGE_PREFIX + connectionName, '');
       this.post(panel, { type: 'init', sql });
+      void this.sendSchema(connectionName, panel);
       return;
     }
     if (message.type === 'save') {
@@ -77,6 +79,30 @@ export class SqlConsoleView {
     }
   }
 
+  /** Snapshot the default database's tables and columns so the editor can autocomplete. */
+  private async sendSchema(connectionName: string, panel: vscode.WebviewPanel): Promise<void> {
+    try {
+      const driver = await this.manager.getDriver(connectionName);
+      const configured = this.manager.getConnection(connectionName)?.database?.trim();
+      const namespace = configured || (await driver.listNamespaces())[0];
+      if (!namespace) {
+        return;
+      }
+      const tableNames = await driver.listTables(namespace);
+      // Cap the eager column fetch so a huge schema never stalls the console open.
+      const capped = tableNames.slice(0, MAX_AUTOCOMPLETE_TABLES);
+      const tables = await Promise.all(
+        capped.map(async (name) => ({
+          name,
+          columns: (await driver.listColumns(namespace, name)).map((column) => column.name),
+        })),
+      );
+      this.post(panel, { type: 'schema', tables });
+    } catch {
+      // Autocomplete is best-effort; a failure here must not break the console.
+    }
+  }
+
   private post(panel: vscode.WebviewPanel, message: ExtensionToConsole): void {
     panel.webview.postMessage(message);
   }
@@ -98,7 +124,10 @@ export class SqlConsoleView {
     <span class="hint">Ctrl+Enter — run selection, or the whole script</span>
     <span id="status"></span>
   </div>
-  <textarea id="editor" spellcheck="false" placeholder="SELECT * FROM …"></textarea>
+  <div id="editorWrap">
+    <textarea id="editor" spellcheck="false" placeholder="SELECT * FROM …"></textarea>
+    <ul id="autocomplete" class="autocomplete" hidden></ul>
+  </div>
   <div id="resultWrap"><table id="result"></table></div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

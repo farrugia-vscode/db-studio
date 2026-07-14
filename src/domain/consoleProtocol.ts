@@ -12,7 +12,19 @@ export interface ConsoleResultMessage {
   error?: string;
 }
 
-export type ExtensionToConsole = ConsoleInitMessage | ConsoleResultMessage;
+/** One table's shape, used by the editor for schema-aware autocomplete. */
+export interface ConsoleTableSchema {
+  name: string;
+  columns: string[];
+}
+
+/** Snapshot of the connection's default database, sent once for autocomplete. */
+export interface ConsoleSchemaMessage {
+  type: 'schema';
+  tables: ConsoleTableSchema[];
+}
+
+export type ExtensionToConsole = ConsoleInitMessage | ConsoleResultMessage | ConsoleSchemaMessage;
 
 /** Messages from the SQL console webview back to the extension host. */
 export interface ConsoleReadyMessage {
