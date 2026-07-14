@@ -20,6 +20,7 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Show table DDL (right-click → Show DDL)
 - [x] Drop / empty table (right-click, modal confirmation)
 - [x] Table designer: create & modify tables (visual columns → CREATE / ALTER, preview + confirm)
+- [x] Indexes, unique constraints and foreign keys in the designer
 - [ ] Select which databases/schemas to display per connection
 - [ ] Show / hide columns in the data grid
 - [ ] Show indexes, foreign keys, views

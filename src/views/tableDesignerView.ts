@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
-import type { ColumnDraft, ColumnMeta } from '../domain/types';
+import type { TableDesign, TableSchema } from '../domain/types';
 import type { DesignerToExtension, ExtensionToDesigner } from '../domain/designerProtocol';
+
+const EMPTY_SCHEMA: TableSchema = { columns: [], indexes: [], foreignKeys: [] };
 
 export interface DesignerTarget {
   connectionName: string;
@@ -18,7 +20,7 @@ export interface DesignerTarget {
 export class TableDesignerView {
   private panel: vscode.WebviewPanel | null = null;
   private target: DesignerTarget | null = null;
-  private original: ColumnMeta[] = [];
+  private original: TableSchema = EMPTY_SCHEMA;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -28,7 +30,7 @@ export class TableDesignerView {
 
   async open(target: DesignerTarget): Promise<void> {
     this.target = target;
-    this.original = [];
+    this.original = EMPTY_SCHEMA;
     if (!this.panel) {
       this.createPanel();
     }
@@ -57,20 +59,43 @@ export class TableDesignerView {
       return;
     }
     try {
-      let columns: ColumnDraft[] = [];
+      let design: TableDesign = { columns: [], indexes: [], foreignKeys: [] };
       if (this.target.table) {
         const driver = await this.manager.getDriver(this.target.connectionName);
-        this.original = await driver.listColumns(this.target.namespace, this.target.table);
-        columns = this.original.map((column) => ({
-          originalName: column.name,
-          name: column.name,
-          type: column.type,
-          isNullable: column.isNullable,
-          isPrimaryKey: column.isPrimaryKey,
-          isAutoIncrement: column.isAutoIncrement,
-          defaultValue: column.defaultValue,
-          drop: false,
-        }));
+        const [columns, indexes, foreignKeys] = await Promise.all([
+          driver.listColumns(this.target.namespace, this.target.table),
+          driver.listIndexes(this.target.namespace, this.target.table),
+          driver.listForeignKeys(this.target.namespace, this.target.table),
+        ]);
+        this.original = { columns, indexes, foreignKeys };
+        design = {
+          columns: columns.map((column) => ({
+            originalName: column.name,
+            name: column.name,
+            type: column.type,
+            isNullable: column.isNullable,
+            isPrimaryKey: column.isPrimaryKey,
+            isAutoIncrement: column.isAutoIncrement,
+            defaultValue: column.defaultValue,
+            drop: false,
+          })),
+          indexes: indexes.map((index) => ({
+            originalName: index.name,
+            name: index.name,
+            isUnique: index.isUnique,
+            columns: index.columns,
+            drop: false,
+          })),
+          foreignKeys: foreignKeys.map((fk) => ({
+            originalName: fk.name,
+            name: fk.name,
+            columns: fk.columns,
+            refTable: fk.refTable,
+            refColumns: fk.refColumns,
+            onDelete: fk.onDelete,
+            drop: false,
+          })),
+        };
       }
       const driver = this.manager.getConnection(this.target.connectionName)?.driver ?? 'mysql';
       this.post({
@@ -78,7 +103,7 @@ export class TableDesignerView {
         mode: this.target.table ? 'modify' : 'create',
         driver,
         table: this.target.table ?? '',
-        columns,
+        design,
       });
     } catch (error) {
       this.reportError(error);
@@ -91,34 +116,34 @@ export class TableDesignerView {
       return;
     }
     if (message.type === 'preview') {
-      await this.preview(message.table, message.columns);
+      await this.preview(message.table, message.design);
       return;
     }
     if (message.type === 'apply') {
-      await this.apply(message.table, message.columns);
+      await this.apply(message.table, message.design);
     }
   }
 
-  private async buildStatements(table: string, columns: ColumnDraft[]): Promise<string[]> {
+  private async buildStatements(table: string, design: TableDesign): Promise<string[]> {
     const driver = await this.manager.getDriver(this.target!.connectionName);
     if (this.target!.table) {
-      return driver.buildAlterTable(this.target!.namespace, this.target!.table, this.original, columns);
+      return driver.buildAlterTable(this.target!.namespace, this.target!.table, this.original, design);
     }
-    return [driver.buildCreateTable(this.target!.namespace, table, columns)];
+    return driver.buildCreateTable(this.target!.namespace, table, design);
   }
 
-  private async preview(table: string, columns: ColumnDraft[]): Promise<void> {
+  private async preview(table: string, design: TableDesign): Promise<void> {
     try {
-      const statements = await this.buildStatements(table, columns);
+      const statements = await this.buildStatements(table, design);
       this.post({ type: 'sql', sql: statements.join('\n') || '-- No changes' });
     } catch (error) {
       this.reportError(error);
     }
   }
 
-  private async apply(table: string, columns: ColumnDraft[]): Promise<void> {
+  private async apply(table: string, design: TableDesign): Promise<void> {
     try {
-      const statements = await this.buildStatements(table, columns);
+      const statements = await this.buildStatements(table, design);
       if (statements.length === 0) {
         vscode.window.showInformationMessage('DB Studio: nothing to apply.');
         return;
@@ -181,6 +206,25 @@ export class TableDesignerView {
       <tbody id="columnsBody"></tbody>
     </table>
     <button id="addColumn">+ Add column</button>
+
+    <div class="section-title">Indexes</div>
+    <table id="indexes">
+      <thead>
+        <tr><th></th><th>Name</th><th>Unique</th><th>Columns (comma-separated)</th></tr>
+      </thead>
+      <tbody id="indexesBody"></tbody>
+    </table>
+    <button id="addIndex">+ Add index</button>
+
+    <div class="section-title">Foreign keys</div>
+    <table id="fks">
+      <thead>
+        <tr><th></th><th>Name</th><th>Columns</th><th>References table</th><th>Ref. columns</th><th>On delete</th></tr>
+      </thead>
+      <tbody id="fksBody"></tbody>
+    </table>
+    <button id="addFk">+ Add foreign key</button>
+
     <div id="sqlPane">
       <div class="sql-title">Generated SQL</div>
       <pre id="sql" class="sql"></pre>

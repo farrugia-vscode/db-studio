@@ -1,4 +1,4 @@
-import type { ColumnDraft, DriverKind } from './types';
+import type { DriverKind, TableDesign } from './types';
 
 /** Messages from the extension host to the table designer webview. */
 export interface DesignerInitMessage {
@@ -6,7 +6,7 @@ export interface DesignerInitMessage {
   mode: 'create' | 'modify';
   driver: DriverKind;
   table: string;
-  columns: ColumnDraft[];
+  design: TableDesign;
 }
 
 export interface DesignerSqlMessage {
@@ -29,13 +29,13 @@ export interface DesignerReadyMessage {
 export interface DesignerPreviewMessage {
   type: 'preview';
   table: string;
-  columns: ColumnDraft[];
+  design: TableDesign;
 }
 
 export interface DesignerApplyMessage {
   type: 'apply';
   table: string;
-  columns: ColumnDraft[];
+  design: TableDesign;
 }
 
 export type DesignerToExtension = DesignerReadyMessage | DesignerPreviewMessage | DesignerApplyMessage;

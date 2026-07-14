@@ -24,13 +24,19 @@
   var mode = "create";
   var driver = "mysql";
   var columns = [];
+  var indexes = [];
+  var foreignKeys = [];
   var body = byId("columnsBody");
+  var indexesBody = byId("indexesBody");
+  var fksBody = byId("fksBody");
   var tableNameInput = byId("tableName");
   var tableNameWrap = byId("tableNameWrap");
   var applyButton = byId("apply");
   var sqlEl = byId("sql");
   var notice = byId("notice");
   byId("addColumn").addEventListener("click", addColumn);
+  byId("addIndex").addEventListener("click", addIndex);
+  byId("addFk").addEventListener("click", addFk);
   applyButton.addEventListener("click", () => send("apply"));
   tableNameInput.addEventListener("input", changed);
   var previewTimer = 0;
@@ -41,7 +47,9 @@
       driver = message.driver;
       tableNameInput.value = message.table;
       tableNameWrap.style.display = mode === "create" ? "" : "none";
-      columns = message.columns;
+      columns = message.design.columns;
+      indexes = message.design.indexes;
+      foreignKeys = message.design.foreignKeys;
       notice.textContent = "";
       notice.classList.remove("error");
       render();
@@ -58,7 +66,7 @@
   });
   api.postMessage({ type: "ready" });
   function send(kind) {
-    api.postMessage({ type: kind, table: tableNameInput.value.trim(), columns });
+    api.postMessage({ type: kind, table: tableNameInput.value.trim(), design: { columns, indexes, foreignKeys } });
   }
   function changed() {
     validate();
@@ -86,7 +94,74 @@
   }
   function render() {
     body.replaceChildren(...columns.map((draft, index) => buildRow(draft, index)));
+    indexesBody.replaceChildren(...indexes.map((draft, index) => buildIndexRow(draft, index)));
+    fksBody.replaceChildren(...foreignKeys.map((draft, index) => buildFkRow(draft, index)));
     changed();
+  }
+  function addIndex() {
+    indexes.push({ originalName: null, name: "", isUnique: false, columns: [], drop: false });
+    render();
+  }
+  function addFk() {
+    foreignKeys.push({ originalName: null, name: "", columns: [], refTable: "", refColumns: [], onDelete: "", drop: false });
+    render();
+  }
+  function buildIndexRow(draft, index) {
+    const row = document.createElement("tr");
+    if (draft.drop) {
+      row.classList.add("dropped");
+    }
+    row.appendChild(rowAction(draft, () => indexes.splice(index, 1)));
+    row.appendChild(textCell(draft.name, (value) => draft.name = value));
+    row.appendChild(checkCell(draft.isUnique, (value) => draft.isUnique = value));
+    row.appendChild(textCell(draft.columns.join(", "), (value) => draft.columns = splitCsv(value)));
+    return row;
+  }
+  function buildFkRow(draft, index) {
+    const row = document.createElement("tr");
+    if (draft.drop) {
+      row.classList.add("dropped");
+    }
+    row.appendChild(rowAction(draft, () => foreignKeys.splice(index, 1)));
+    row.appendChild(textCell(draft.name, (value) => draft.name = value));
+    row.appendChild(textCell(draft.columns.join(", "), (value) => draft.columns = splitCsv(value)));
+    row.appendChild(textCell(draft.refTable, (value) => draft.refTable = value));
+    row.appendChild(textCell(draft.refColumns.join(", "), (value) => draft.refColumns = splitCsv(value)));
+    row.appendChild(onDeleteCell(draft));
+    return row;
+  }
+  function rowAction(draft, remove) {
+    const cell = document.createElement("td");
+    cell.className = "actions";
+    const button = document.createElement("button");
+    button.textContent = draft.drop ? "\u21BA" : "\xD7";
+    button.addEventListener("click", () => {
+      if (mode === "modify" && draft.originalName) {
+        draft.drop = !draft.drop;
+      } else {
+        remove();
+      }
+      render();
+    });
+    cell.appendChild(button);
+    return cell;
+  }
+  function onDeleteCell(draft) {
+    const cell = document.createElement("td");
+    const select = document.createElement("select");
+    for (const option of ["", "CASCADE", "SET NULL", "RESTRICT", "NO ACTION"]) {
+      select.appendChild(new Option(option === "" ? "(none)" : option, option));
+    }
+    select.value = draft.onDelete;
+    select.addEventListener("change", () => {
+      draft.onDelete = select.value;
+      changed();
+    });
+    cell.appendChild(select);
+    return cell;
+  }
+  function splitCsv(value) {
+    return value.split(",").map((part) => part.trim()).filter((part) => part !== "");
   }
   function buildRow(draft, index) {
     const row = document.createElement("tr");

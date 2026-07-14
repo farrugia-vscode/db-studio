@@ -37,6 +37,54 @@ export interface ColumnDraft {
   drop: boolean;
 }
 
+export interface IndexMeta {
+  name: string;
+  isUnique: boolean;
+  columns: string[];
+}
+
+export interface ForeignKeyMeta {
+  name: string;
+  columns: string[];
+  refTable: string;
+  refColumns: string[];
+  onDelete: string;
+}
+
+/** An index as edited in the designer. */
+export interface IndexDraft {
+  originalName: string | null;
+  name: string;
+  isUnique: boolean;
+  columns: string[];
+  drop: boolean;
+}
+
+/** A foreign key as edited in the designer. */
+export interface ForeignKeyDraft {
+  originalName: string | null;
+  name: string;
+  columns: string[];
+  refTable: string;
+  refColumns: string[];
+  onDelete: string;
+  drop: boolean;
+}
+
+/** The full edited state of a table in the designer. */
+export interface TableDesign {
+  columns: ColumnDraft[];
+  indexes: IndexDraft[];
+  foreignKeys: ForeignKeyDraft[];
+}
+
+/** The current schema of an existing table (for the modify diff). */
+export interface TableSchema {
+  columns: ColumnMeta[];
+  indexes: IndexMeta[];
+  foreignKeys: ForeignKeyMeta[];
+}
+
 export type Row = Record<string, unknown>;
 
 export interface QueryResult {

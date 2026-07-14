@@ -1,6 +1,18 @@
 import { Client } from 'pg';
 import type { DatabaseDriver } from '../domain/driver';
-import type { ColumnDraft, ColumnMeta, ConnectionConfig, QueryResult, Row } from '../domain/types';
+import type {
+  ColumnDraft,
+  ColumnMeta,
+  ConnectionConfig,
+  ForeignKeyDraft,
+  ForeignKeyMeta,
+  IndexMeta,
+  QueryResult,
+  Row,
+  TableDesign,
+  TableSchema,
+} from '../domain/types';
+import { activeForeignKeys, activeIndexes, isCompleteForeignKey } from '../domain/ddlHelpers';
 
 /**
  * PostgreSQL driver. A connection is bound to a single database; a "namespace"
@@ -143,22 +155,87 @@ export class PostgresDriver implements DatabaseDriver {
     return `DROP SCHEMA ${this.quoteIdentifier(name)} CASCADE;`;
   }
 
-  buildCreateTable(namespace: string, table: string, columns: ColumnDraft[]): string {
-    const active = columns.filter((column) => !column.drop && column.name.trim() !== '');
+  async listIndexes(namespace: string, table: string): Promise<IndexMeta[]> {
+    await this.connect();
+    const result = await this.client!.query<{ name: string; is_unique: boolean; columns: string[] }>(
+      `SELECT i.relname AS name, ix.indisunique AS is_unique,
+              array_agg(a.attname ORDER BY k.ord) AS columns
+       FROM pg_index ix
+       JOIN pg_class i ON i.oid = ix.indexrelid
+       JOIN pg_class t ON t.oid = ix.indrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
+       JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+       WHERE n.nspname = $1 AND t.relname = $2 AND NOT ix.indisprimary
+       GROUP BY i.relname, ix.indisunique`,
+      [namespace, table],
+    );
+    return result.rows.map((row) => ({ name: row.name, isUnique: row.is_unique === true, columns: row.columns }));
+  }
+
+  async listForeignKeys(namespace: string, table: string): Promise<ForeignKeyMeta[]> {
+    await this.connect();
+    const result = await this.client!.query<{
+      name: string;
+      columns: string[];
+      reftable: string;
+      refcolumns: string[];
+      del: string;
+    }>(
+      `SELECT con.conname AS name, cl.relname AS reftable, con.confdeltype AS del,
+              (SELECT array_agg(att.attname ORDER BY k.ord)
+               FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+               JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = k.attnum) AS columns,
+              (SELECT array_agg(att.attname ORDER BY k.ord)
+               FROM unnest(con.confkey) WITH ORDINALITY AS k(attnum, ord)
+               JOIN pg_attribute att ON att.attrelid = con.confrelid AND att.attnum = k.attnum) AS refcolumns
+       FROM pg_constraint con
+       JOIN pg_class t ON t.oid = con.conrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       JOIN pg_class cl ON cl.oid = con.confrelid
+       WHERE con.contype = 'f' AND n.nspname = $1 AND t.relname = $2`,
+      [namespace, table],
+    );
+    const deleteRules: Record<string, string> = { r: 'RESTRICT', c: 'CASCADE', n: 'SET NULL', d: 'SET DEFAULT' };
+    return result.rows.map((row) => ({
+      name: row.name,
+      columns: row.columns,
+      refTable: row.reftable,
+      refColumns: row.refcolumns,
+      onDelete: deleteRules[row.del] ?? '',
+    }));
+  }
+
+  buildCreateTable(namespace: string, table: string, design: TableDesign): string[] {
+    const ref = this.buildTableRef(namespace, table);
+    const active = design.columns.filter((column) => !column.drop && column.name.trim() !== '');
     const lines = active.map((column) => `  ${this.columnDef(column)}`);
     const pk = active.filter((column) => column.isPrimaryKey).map((column) => this.quoteIdentifier(column.name));
     if (pk.length > 0) {
       lines.push(`  PRIMARY KEY (${pk.join(', ')})`);
     }
-    return `CREATE TABLE ${this.buildTableRef(namespace, table)} (\n${lines.join(',\n')}\n);`;
+    const indexes = activeIndexes(design.indexes);
+    for (const index of indexes.filter((entry) => entry.isUnique)) {
+      const cols = index.columns.map((column) => this.quoteIdentifier(column)).join(', ');
+      lines.push(`  CONSTRAINT ${this.quoteIdentifier(index.name)} UNIQUE (${cols})`);
+    }
+    for (const fk of activeForeignKeys(design.foreignKeys)) {
+      lines.push(`  ${this.foreignKeyDef(fk)}`);
+    }
+    const statements = [`CREATE TABLE ${ref} (\n${lines.join(',\n')}\n);`];
+    for (const index of indexes.filter((entry) => !entry.isUnique)) {
+      const cols = index.columns.map((column) => this.quoteIdentifier(column)).join(', ');
+      statements.push(`CREATE INDEX ${this.quoteIdentifier(index.name)} ON ${ref} (${cols});`);
+    }
+    return statements;
   }
 
-  buildAlterTable(namespace: string, table: string, original: ColumnMeta[], edited: ColumnDraft[]): string[] {
+  buildAlterTable(namespace: string, table: string, original: TableSchema, edited: TableDesign): string[] {
     const ref = this.buildTableRef(namespace, table);
-    const originalByName = new Map(original.map((column) => [column.name, column]));
+    const originalByName = new Map(original.columns.map((column) => [column.name, column]));
     const statements: string[] = [];
 
-    for (const draft of edited) {
+    for (const draft of edited.columns) {
       if (draft.drop) {
         if (draft.originalName) {
           statements.push(`ALTER TABLE ${ref} DROP COLUMN ${this.quoteIdentifier(draft.originalName)};`);
@@ -196,15 +273,54 @@ export class PostgresDriver implements DatabaseDriver {
       }
     }
 
-    const originalPk = original.filter((column) => column.isPrimaryKey).map((column) => column.name).sort().join(',');
-    const editedPk = edited.filter((column) => !column.drop && column.isPrimaryKey).map((column) => column.name);
+    const originalPk = original.columns.filter((column) => column.isPrimaryKey).map((column) => column.name).sort().join(',');
+    const editedPk = edited.columns.filter((column) => !column.drop && column.isPrimaryKey).map((column) => column.name);
     if (originalPk !== [...editedPk].sort().join(',')) {
       statements.push(`ALTER TABLE ${ref} DROP CONSTRAINT IF EXISTS ${this.quoteIdentifier(`${table}_pkey`)};`);
       if (editedPk.length > 0) {
         statements.push(`ALTER TABLE ${ref} ADD PRIMARY KEY (${editedPk.map((name) => this.quoteIdentifier(name)).join(', ')});`);
       }
     }
+
+    for (const index of edited.indexes) {
+      if (index.drop) {
+        if (index.originalName) {
+          statements.push(
+            index.isUnique
+              ? `ALTER TABLE ${ref} DROP CONSTRAINT IF EXISTS ${this.quoteIdentifier(index.originalName)};`
+              : `DROP INDEX IF EXISTS ${this.quoteIdentifier(namespace)}.${this.quoteIdentifier(index.originalName)};`,
+          );
+        }
+      } else if (index.originalName === null && index.name.trim() !== '' && index.columns.length > 0) {
+        const cols = index.columns.map((column) => this.quoteIdentifier(column)).join(', ');
+        statements.push(
+          index.isUnique
+            ? `ALTER TABLE ${ref} ADD CONSTRAINT ${this.quoteIdentifier(index.name)} UNIQUE (${cols});`
+            : `CREATE INDEX ${this.quoteIdentifier(index.name)} ON ${ref} (${cols});`,
+        );
+      }
+    }
+
+    for (const fk of edited.foreignKeys) {
+      if (fk.drop) {
+        if (fk.originalName) {
+          statements.push(`ALTER TABLE ${ref} DROP CONSTRAINT IF EXISTS ${this.quoteIdentifier(fk.originalName)};`);
+        }
+      } else if (fk.originalName === null && isCompleteForeignKey(fk)) {
+        statements.push(`ALTER TABLE ${ref} ADD ${this.foreignKeyDef(fk)};`);
+      }
+    }
     return statements;
+  }
+
+  private foreignKeyDef(fk: ForeignKeyDraft): string {
+    const cols = fk.columns.map((column) => this.quoteIdentifier(column)).join(', ');
+    const refCols = fk.refColumns.map((column) => this.quoteIdentifier(column)).join(', ');
+    let def = `CONSTRAINT ${this.quoteIdentifier(fk.name)} FOREIGN KEY (${cols}) REFERENCES ${this.quoteIdentifier(fk.refTable)} (${refCols})`;
+    if (fk.onDelete.trim() !== '') {
+      def += ` ON DELETE ${fk.onDelete}`;
+    }
+    return def;
   }
 
   private columnDef(column: ColumnDraft): string {

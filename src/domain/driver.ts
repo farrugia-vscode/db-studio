@@ -1,4 +1,11 @@
-import type { ColumnDraft, ColumnMeta, QueryResult } from './types';
+import type {
+  ColumnMeta,
+  ForeignKeyMeta,
+  IndexMeta,
+  QueryResult,
+  TableDesign,
+  TableSchema,
+} from './types';
 
 /**
  * Driver capabilities are split into focused interfaces (ISP) so each consumer
@@ -16,6 +23,8 @@ export interface SchemaIntrospector {
   listNamespaces(): Promise<string[]>;
   listTables(namespace: string): Promise<string[]>;
   listColumns(namespace: string, table: string): Promise<ColumnMeta[]>;
+  listIndexes(namespace: string, table: string): Promise<IndexMeta[]>;
+  listForeignKeys(namespace: string, table: string): Promise<ForeignKeyMeta[]>;
   /** The CREATE TABLE statement for a table. */
   getTableDdl(namespace: string, table: string): Promise<string>;
 }
@@ -39,8 +48,8 @@ export interface SchemaMutator {
   buildCreateNamespace(name: string): string;
   /** DROP DATABASE (MySQL) or DROP SCHEMA … CASCADE (PostgreSQL). */
   buildDropNamespace(name: string): string;
-  buildCreateTable(namespace: string, table: string, columns: ColumnDraft[]): string;
-  buildAlterTable(namespace: string, table: string, original: ColumnMeta[], edited: ColumnDraft[]): string[];
+  buildCreateTable(namespace: string, table: string, design: TableDesign): string[];
+  buildAlterTable(namespace: string, table: string, original: TableSchema, edited: TableDesign): string[];
 }
 
 export interface DatabaseDriver extends Connectable, SchemaIntrospector, StatementExecutor, SqlDialect, SchemaMutator {}

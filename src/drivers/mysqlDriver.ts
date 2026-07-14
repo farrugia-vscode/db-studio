@@ -1,7 +1,19 @@
 import { createConnection, type Connection } from 'mysql2/promise';
 import type { FieldPacket, ResultSetHeader, RowDataPacket } from 'mysql2';
 import type { DatabaseDriver } from '../domain/driver';
-import type { ColumnDraft, ColumnMeta, ConnectionConfig, QueryResult, Row } from '../domain/types';
+import { activeForeignKeys, activeIndexes, isCompleteForeignKey } from '../domain/ddlHelpers';
+import type {
+  ColumnDraft,
+  ColumnMeta,
+  ConnectionConfig,
+  ForeignKeyDraft,
+  ForeignKeyMeta,
+  IndexMeta,
+  QueryResult,
+  Row,
+  TableDesign,
+  TableSchema,
+} from '../domain/types';
 
 const HIDDEN_DATABASES = ['information_schema', 'performance_schema', 'mysql', 'sys'];
 
@@ -96,22 +108,72 @@ export class MysqlDriver implements DatabaseDriver {
     return `DROP DATABASE ${this.quoteIdentifier(name)};`;
   }
 
-  buildCreateTable(namespace: string, table: string, columns: ColumnDraft[]): string {
-    const active = columns.filter((column) => !column.drop && column.name.trim() !== '');
+  async listIndexes(namespace: string, table: string): Promise<IndexMeta[]> {
+    const rows = await this.select(`SHOW INDEX FROM ${this.buildTableRef(namespace, table)}`);
+    const byName = new Map<string, { meta: IndexMeta; parts: Array<{ seq: number; column: string }> }>();
+    for (const row of rows) {
+      const name = String(row.Key_name);
+      if (name === 'PRIMARY') {
+        continue;
+      }
+      if (!byName.has(name)) {
+        byName.set(name, { meta: { name, isUnique: Number(row.Non_unique) === 0, columns: [] }, parts: [] });
+      }
+      byName.get(name)!.parts.push({ seq: Number(row.Seq_in_index), column: String(row.Column_name) });
+    }
+    return [...byName.values()].map(({ meta, parts }) => ({
+      ...meta,
+      columns: parts.sort((a, b) => a.seq - b.seq).map((part) => part.column),
+    }));
+  }
+
+  async listForeignKeys(namespace: string, table: string): Promise<ForeignKeyMeta[]> {
+    const rows = await this.select(
+      `SELECT kcu.constraint_name AS name, kcu.column_name AS col, kcu.referenced_table_name AS reftable,
+              kcu.referenced_column_name AS refcol, rc.delete_rule AS del
+       FROM information_schema.key_column_usage kcu
+       JOIN information_schema.referential_constraints rc
+         ON rc.constraint_schema = kcu.table_schema AND rc.constraint_name = kcu.constraint_name
+       WHERE kcu.table_schema = ? AND kcu.table_name = ? AND kcu.referenced_table_name IS NOT NULL
+       ORDER BY kcu.constraint_name, kcu.ordinal_position`,
+      [namespace, table],
+    );
+    const byName = new Map<string, ForeignKeyMeta>();
+    for (const row of rows) {
+      const name = String(row.name);
+      if (!byName.has(name)) {
+        byName.set(name, { name, columns: [], refTable: String(row.reftable), refColumns: [], onDelete: row.del ? String(row.del) : '' });
+      }
+      const fk = byName.get(name)!;
+      fk.columns.push(String(row.col));
+      fk.refColumns.push(String(row.refcol));
+    }
+    return [...byName.values()];
+  }
+
+  buildCreateTable(namespace: string, table: string, design: TableDesign): string[] {
+    const active = design.columns.filter((column) => !column.drop && column.name.trim() !== '');
     const lines = active.map((column) => `  ${this.columnDef(column)}`);
     const pk = active.filter((column) => column.isPrimaryKey).map((column) => this.quoteIdentifier(column.name));
     if (pk.length > 0) {
       lines.push(`  PRIMARY KEY (${pk.join(', ')})`);
     }
-    return `CREATE TABLE ${this.buildTableRef(namespace, table)} (\n${lines.join(',\n')}\n);`;
+    for (const index of activeIndexes(design.indexes)) {
+      const cols = index.columns.map((column) => this.quoteIdentifier(column)).join(', ');
+      lines.push(`  ${index.isUnique ? 'UNIQUE KEY' : 'KEY'} ${this.quoteIdentifier(index.name)} (${cols})`);
+    }
+    for (const fk of activeForeignKeys(design.foreignKeys)) {
+      lines.push(`  ${this.foreignKeyDef(fk)}`);
+    }
+    return [`CREATE TABLE ${this.buildTableRef(namespace, table)} (\n${lines.join(',\n')}\n);`];
   }
 
-  buildAlterTable(namespace: string, table: string, original: ColumnMeta[], edited: ColumnDraft[]): string[] {
+  buildAlterTable(namespace: string, table: string, original: TableSchema, edited: TableDesign): string[] {
     const ref = this.buildTableRef(namespace, table);
-    const originalByName = new Map(original.map((column) => [column.name, column]));
+    const originalByName = new Map(original.columns.map((column) => [column.name, column]));
     const statements: string[] = [];
 
-    for (const draft of edited) {
+    for (const draft of edited.columns) {
       if (draft.drop) {
         if (draft.originalName) {
           statements.push(`ALTER TABLE ${ref} DROP COLUMN ${this.quoteIdentifier(draft.originalName)};`);
@@ -130,8 +192,8 @@ export class MysqlDriver implements DatabaseDriver {
       }
     }
 
-    const originalPk = original.filter((column) => column.isPrimaryKey).map((column) => column.name).sort().join(',');
-    const editedPk = edited.filter((column) => !column.drop && column.isPrimaryKey).map((column) => column.name);
+    const originalPk = original.columns.filter((column) => column.isPrimaryKey).map((column) => column.name).sort().join(',');
+    const editedPk = edited.columns.filter((column) => !column.drop && column.isPrimaryKey).map((column) => column.name);
     if (originalPk !== [...editedPk].sort().join(',')) {
       if (originalPk !== '') {
         statements.push(`ALTER TABLE ${ref} DROP PRIMARY KEY;`);
@@ -140,7 +202,38 @@ export class MysqlDriver implements DatabaseDriver {
         statements.push(`ALTER TABLE ${ref} ADD PRIMARY KEY (${editedPk.map((name) => this.quoteIdentifier(name)).join(', ')});`);
       }
     }
+
+    for (const index of edited.indexes) {
+      if (index.drop) {
+        if (index.originalName) {
+          statements.push(`ALTER TABLE ${ref} DROP INDEX ${this.quoteIdentifier(index.originalName)};`);
+        }
+      } else if (index.originalName === null && index.name.trim() !== '' && index.columns.length > 0) {
+        const cols = index.columns.map((column) => this.quoteIdentifier(column)).join(', ');
+        statements.push(`ALTER TABLE ${ref} ADD ${index.isUnique ? 'UNIQUE INDEX' : 'INDEX'} ${this.quoteIdentifier(index.name)} (${cols});`);
+      }
+    }
+
+    for (const fk of edited.foreignKeys) {
+      if (fk.drop) {
+        if (fk.originalName) {
+          statements.push(`ALTER TABLE ${ref} DROP FOREIGN KEY ${this.quoteIdentifier(fk.originalName)};`);
+        }
+      } else if (fk.originalName === null && isCompleteForeignKey(fk)) {
+        statements.push(`ALTER TABLE ${ref} ADD ${this.foreignKeyDef(fk)};`);
+      }
+    }
     return statements;
+  }
+
+  private foreignKeyDef(fk: ForeignKeyDraft): string {
+    const cols = fk.columns.map((column) => this.quoteIdentifier(column)).join(', ');
+    const refCols = fk.refColumns.map((column) => this.quoteIdentifier(column)).join(', ');
+    let def = `CONSTRAINT ${this.quoteIdentifier(fk.name)} FOREIGN KEY (${cols}) REFERENCES ${this.quoteIdentifier(fk.refTable)} (${refCols})`;
+    if (fk.onDelete.trim() !== '') {
+      def += ` ON DELETE ${fk.onDelete}`;
+    }
+    return def;
   }
 
   private columnDef(column: ColumnDraft): string {

@@ -1,4 +1,4 @@
-import type { ColumnDraft, DriverKind } from '../domain/types';
+import type { ColumnDraft, DriverKind, ForeignKeyDraft, IndexDraft } from '../domain/types';
 import type { DesignerToExtension, ExtensionToDesigner } from '../domain/designerProtocol';
 
 interface VsCodeApi {
@@ -31,8 +31,12 @@ function flatTypes(kind: DriverKind): string[] {
 let mode: 'create' | 'modify' = 'create';
 let driver: DriverKind = 'mysql';
 let columns: ColumnDraft[] = [];
+let indexes: IndexDraft[] = [];
+let foreignKeys: ForeignKeyDraft[] = [];
 
 const body = byId<HTMLTableSectionElement>('columnsBody');
+const indexesBody = byId<HTMLTableSectionElement>('indexesBody');
+const fksBody = byId<HTMLTableSectionElement>('fksBody');
 const tableNameInput = byId<HTMLInputElement>('tableName');
 const tableNameWrap = byId<HTMLLabelElement>('tableNameWrap');
 const applyButton = byId<HTMLButtonElement>('apply');
@@ -40,6 +44,8 @@ const sqlEl = byId<HTMLPreElement>('sql');
 const notice = byId<HTMLDivElement>('notice');
 
 byId<HTMLButtonElement>('addColumn').addEventListener('click', addColumn);
+byId<HTMLButtonElement>('addIndex').addEventListener('click', addIndex);
+byId<HTMLButtonElement>('addFk').addEventListener('click', addFk);
 applyButton.addEventListener('click', () => send('apply'));
 tableNameInput.addEventListener('input', changed);
 
@@ -52,7 +58,9 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToDesigner>) =>
     driver = message.driver;
     tableNameInput.value = message.table;
     tableNameWrap.style.display = mode === 'create' ? '' : 'none';
-    columns = message.columns;
+    columns = message.design.columns;
+    indexes = message.design.indexes;
+    foreignKeys = message.design.foreignKeys;
     notice.textContent = '';
     notice.classList.remove('error');
     render();
@@ -71,7 +79,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToDesigner>) =>
 api.postMessage({ type: 'ready' });
 
 function send(kind: 'preview' | 'apply'): void {
-  api.postMessage({ type: kind, table: tableNameInput.value.trim(), columns });
+  api.postMessage({ type: kind, table: tableNameInput.value.trim(), design: { columns, indexes, foreignKeys } });
 }
 
 // Any change re-validates (gates Apply) immediately and refreshes the SQL preview (debounced).
@@ -104,7 +112,81 @@ function addColumn(): void {
 
 function render(): void {
   body.replaceChildren(...columns.map((draft, index) => buildRow(draft, index)));
+  indexesBody.replaceChildren(...indexes.map((draft, index) => buildIndexRow(draft, index)));
+  fksBody.replaceChildren(...foreignKeys.map((draft, index) => buildFkRow(draft, index)));
   changed();
+}
+
+function addIndex(): void {
+  indexes.push({ originalName: null, name: '', isUnique: false, columns: [], drop: false });
+  render();
+}
+
+function addFk(): void {
+  foreignKeys.push({ originalName: null, name: '', columns: [], refTable: '', refColumns: [], onDelete: '', drop: false });
+  render();
+}
+
+function buildIndexRow(draft: IndexDraft, index: number): HTMLTableRowElement {
+  const row = document.createElement('tr');
+  if (draft.drop) {
+    row.classList.add('dropped');
+  }
+  row.appendChild(rowAction(draft, () => indexes.splice(index, 1)));
+  row.appendChild(textCell(draft.name, (value) => (draft.name = value)));
+  row.appendChild(checkCell(draft.isUnique, (value) => (draft.isUnique = value)));
+  row.appendChild(textCell(draft.columns.join(', '), (value) => (draft.columns = splitCsv(value))));
+  return row;
+}
+
+function buildFkRow(draft: ForeignKeyDraft, index: number): HTMLTableRowElement {
+  const row = document.createElement('tr');
+  if (draft.drop) {
+    row.classList.add('dropped');
+  }
+  row.appendChild(rowAction(draft, () => foreignKeys.splice(index, 1)));
+  row.appendChild(textCell(draft.name, (value) => (draft.name = value)));
+  row.appendChild(textCell(draft.columns.join(', '), (value) => (draft.columns = splitCsv(value))));
+  row.appendChild(textCell(draft.refTable, (value) => (draft.refTable = value)));
+  row.appendChild(textCell(draft.refColumns.join(', '), (value) => (draft.refColumns = splitCsv(value))));
+  row.appendChild(onDeleteCell(draft));
+  return row;
+}
+
+function rowAction(draft: { originalName: string | null; drop: boolean }, remove: () => void): HTMLTableCellElement {
+  const cell = document.createElement('td');
+  cell.className = 'actions';
+  const button = document.createElement('button');
+  button.textContent = draft.drop ? '↺' : '×';
+  button.addEventListener('click', () => {
+    if (mode === 'modify' && draft.originalName) {
+      draft.drop = !draft.drop;
+    } else {
+      remove();
+    }
+    render();
+  });
+  cell.appendChild(button);
+  return cell;
+}
+
+function onDeleteCell(draft: ForeignKeyDraft): HTMLTableCellElement {
+  const cell = document.createElement('td');
+  const select = document.createElement('select');
+  for (const option of ['', 'CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION']) {
+    select.appendChild(new Option(option === '' ? '(none)' : option, option));
+  }
+  select.value = draft.onDelete;
+  select.addEventListener('change', () => {
+    draft.onDelete = select.value;
+    changed();
+  });
+  cell.appendChild(select);
+  return cell;
+}
+
+function splitCsv(value: string): string[] {
+  return value.split(',').map((part) => part.trim()).filter((part) => part !== '');
 }
 
 function buildRow(draft: ColumnDraft, index: number): HTMLTableRowElement {
