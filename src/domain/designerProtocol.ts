@@ -7,6 +7,15 @@ export interface DesignerInitMessage {
   driver: DriverKind;
   table: string;
   design: TableDesign;
+  /** Tables in the namespace, for the foreign-key "references" dropdown. */
+  tables: string[];
+}
+
+/** Columns of a referenced table (answer to a webview request). */
+export interface DesignerRefColumnsMessage {
+  type: 'refColumns';
+  table: string;
+  columns: string[];
 }
 
 export interface DesignerSqlMessage {
@@ -19,7 +28,11 @@ export interface DesignerErrorMessage {
   message: string;
 }
 
-export type ExtensionToDesigner = DesignerInitMessage | DesignerSqlMessage | DesignerErrorMessage;
+export type ExtensionToDesigner =
+  | DesignerInitMessage
+  | DesignerSqlMessage
+  | DesignerErrorMessage
+  | DesignerRefColumnsMessage;
 
 /** Messages from the table designer webview back to the extension host. */
 export interface DesignerReadyMessage {
@@ -38,4 +51,14 @@ export interface DesignerApplyMessage {
   design: TableDesign;
 }
 
-export type DesignerToExtension = DesignerReadyMessage | DesignerPreviewMessage | DesignerApplyMessage;
+/** Ask the host for the columns of a referenced table. */
+export interface DesignerRefColumnsRequest {
+  type: 'refColumns';
+  table: string;
+}
+
+export type DesignerToExtension =
+  | DesignerReadyMessage
+  | DesignerPreviewMessage
+  | DesignerApplyMessage
+  | DesignerRefColumnsRequest;

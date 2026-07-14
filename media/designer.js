@@ -26,6 +26,8 @@
   var columns = [];
   var indexes = [];
   var foreignKeys = [];
+  var tables = [];
+  var refColumnsCache = {};
   var body = byId("columnsBody");
   var indexesBody = byId("indexesBody");
   var fksBody = byId("fksBody");
@@ -50,8 +52,14 @@
       columns = message.design.columns;
       indexes = message.design.indexes;
       foreignKeys = message.design.foreignKeys;
+      tables = message.tables;
       notice.textContent = "";
       notice.classList.remove("error");
+      render();
+      return;
+    }
+    if (message.type === "refColumns") {
+      refColumnsCache[message.table] = message.columns;
       render();
       return;
     }
@@ -106,6 +114,9 @@
     foreignKeys.push({ originalName: null, name: "", columns: [], refTable: "", refColumns: [], onDelete: "", drop: false });
     render();
   }
+  function designedColumnNames() {
+    return columns.filter((column) => !column.drop && column.name.trim() !== "").map((column) => column.name);
+  }
   function buildIndexRow(draft, index) {
     const row = document.createElement("tr");
     if (draft.drop) {
@@ -114,7 +125,7 @@
     row.appendChild(rowAction(draft, () => indexes.splice(index, 1)));
     row.appendChild(textCell(draft.name, (value) => draft.name = value));
     row.appendChild(checkCell(draft.isUnique, (value) => draft.isUnique = value));
-    row.appendChild(textCell(draft.columns.join(", "), (value) => draft.columns = splitCsv(value)));
+    row.appendChild(multiSelectCell(designedColumnNames(), draft.columns, (values) => draft.columns = values));
     return row;
   }
   function buildFkRow(draft, index) {
@@ -122,13 +133,54 @@
     if (draft.drop) {
       row.classList.add("dropped");
     }
+    ensureRefColumns(draft.refTable);
     row.appendChild(rowAction(draft, () => foreignKeys.splice(index, 1)));
     row.appendChild(textCell(draft.name, (value) => draft.name = value));
-    row.appendChild(textCell(draft.columns.join(", "), (value) => draft.columns = splitCsv(value)));
-    row.appendChild(textCell(draft.refTable, (value) => draft.refTable = value));
-    row.appendChild(textCell(draft.refColumns.join(", "), (value) => draft.refColumns = splitCsv(value)));
+    row.appendChild(multiSelectCell(designedColumnNames(), draft.columns, (values) => draft.columns = values));
+    row.appendChild(refTableCell(draft));
+    row.appendChild(multiSelectCell(refColumnsCache[draft.refTable] ?? draft.refColumns, draft.refColumns, (values) => draft.refColumns = values));
     row.appendChild(onDeleteCell(draft));
     return row;
+  }
+  function refTableCell(draft) {
+    const cell = document.createElement("td");
+    const select = document.createElement("select");
+    select.appendChild(new Option("(table)", ""));
+    const options = draft.refTable && !tables.includes(draft.refTable) ? [...tables, draft.refTable] : tables;
+    for (const table of options) {
+      select.appendChild(new Option(table, table));
+    }
+    select.value = draft.refTable;
+    select.addEventListener("change", () => {
+      draft.refTable = select.value;
+      draft.refColumns = [];
+      ensureRefColumns(select.value);
+      render();
+    });
+    cell.appendChild(select);
+    return cell;
+  }
+  function ensureRefColumns(table) {
+    if (table.trim() !== "" && !refColumnsCache[table]) {
+      api.postMessage({ type: "refColumns", table });
+    }
+  }
+  function multiSelectCell(options, selected, onChange) {
+    const cell = document.createElement("td");
+    const select = document.createElement("select");
+    select.multiple = true;
+    select.className = "multi";
+    const all = [.../* @__PURE__ */ new Set([...options, ...selected])];
+    for (const option of all) {
+      select.appendChild(new Option(option, option, false, selected.includes(option)));
+    }
+    select.size = Math.min(Math.max(all.length, 2), 4);
+    select.addEventListener("change", () => {
+      onChange([...select.selectedOptions].map((option) => option.value));
+      changed();
+    });
+    cell.appendChild(select);
+    return cell;
   }
   function rowAction(draft, remove) {
     const cell = document.createElement("td");
@@ -159,9 +211,6 @@
     });
     cell.appendChild(select);
     return cell;
-  }
-  function splitCsv(value) {
-    return value.split(",").map((part) => part.trim()).filter((part) => part !== "");
   }
   function buildRow(draft, index) {
     const row = document.createElement("tr");

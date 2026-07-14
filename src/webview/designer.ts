@@ -33,6 +33,8 @@ let driver: DriverKind = 'mysql';
 let columns: ColumnDraft[] = [];
 let indexes: IndexDraft[] = [];
 let foreignKeys: ForeignKeyDraft[] = [];
+let tables: string[] = [];
+const refColumnsCache: Record<string, string[]> = {};
 
 const body = byId<HTMLTableSectionElement>('columnsBody');
 const indexesBody = byId<HTMLTableSectionElement>('indexesBody');
@@ -61,8 +63,14 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToDesigner>) =>
     columns = message.design.columns;
     indexes = message.design.indexes;
     foreignKeys = message.design.foreignKeys;
+    tables = message.tables;
     notice.textContent = '';
     notice.classList.remove('error');
+    render();
+    return;
+  }
+  if (message.type === 'refColumns') {
+    refColumnsCache[message.table] = message.columns;
     render();
     return;
   }
@@ -127,6 +135,10 @@ function addFk(): void {
   render();
 }
 
+function designedColumnNames(): string[] {
+  return columns.filter((column) => !column.drop && column.name.trim() !== '').map((column) => column.name);
+}
+
 function buildIndexRow(draft: IndexDraft, index: number): HTMLTableRowElement {
   const row = document.createElement('tr');
   if (draft.drop) {
@@ -135,7 +147,7 @@ function buildIndexRow(draft: IndexDraft, index: number): HTMLTableRowElement {
   row.appendChild(rowAction(draft, () => indexes.splice(index, 1)));
   row.appendChild(textCell(draft.name, (value) => (draft.name = value)));
   row.appendChild(checkCell(draft.isUnique, (value) => (draft.isUnique = value)));
-  row.appendChild(textCell(draft.columns.join(', '), (value) => (draft.columns = splitCsv(value))));
+  row.appendChild(multiSelectCell(designedColumnNames(), draft.columns, (values) => (draft.columns = values)));
   return row;
 }
 
@@ -144,13 +156,57 @@ function buildFkRow(draft: ForeignKeyDraft, index: number): HTMLTableRowElement 
   if (draft.drop) {
     row.classList.add('dropped');
   }
+  ensureRefColumns(draft.refTable);
   row.appendChild(rowAction(draft, () => foreignKeys.splice(index, 1)));
   row.appendChild(textCell(draft.name, (value) => (draft.name = value)));
-  row.appendChild(textCell(draft.columns.join(', '), (value) => (draft.columns = splitCsv(value))));
-  row.appendChild(textCell(draft.refTable, (value) => (draft.refTable = value)));
-  row.appendChild(textCell(draft.refColumns.join(', '), (value) => (draft.refColumns = splitCsv(value))));
+  row.appendChild(multiSelectCell(designedColumnNames(), draft.columns, (values) => (draft.columns = values)));
+  row.appendChild(refTableCell(draft));
+  row.appendChild(multiSelectCell(refColumnsCache[draft.refTable] ?? draft.refColumns, draft.refColumns, (values) => (draft.refColumns = values)));
   row.appendChild(onDeleteCell(draft));
   return row;
+}
+
+function refTableCell(draft: ForeignKeyDraft): HTMLTableCellElement {
+  const cell = document.createElement('td');
+  const select = document.createElement('select');
+  select.appendChild(new Option('(table)', ''));
+  const options = draft.refTable && !tables.includes(draft.refTable) ? [...tables, draft.refTable] : tables;
+  for (const table of options) {
+    select.appendChild(new Option(table, table));
+  }
+  select.value = draft.refTable;
+  select.addEventListener('change', () => {
+    draft.refTable = select.value;
+    draft.refColumns = [];
+    ensureRefColumns(select.value);
+    render();
+  });
+  cell.appendChild(select);
+  return cell;
+}
+
+function ensureRefColumns(table: string): void {
+  if (table.trim() !== '' && !refColumnsCache[table]) {
+    api.postMessage({ type: 'refColumns', table });
+  }
+}
+
+function multiSelectCell(options: string[], selected: string[], onChange: (values: string[]) => void): HTMLTableCellElement {
+  const cell = document.createElement('td');
+  const select = document.createElement('select');
+  select.multiple = true;
+  select.className = 'multi';
+  const all = [...new Set([...options, ...selected])];
+  for (const option of all) {
+    select.appendChild(new Option(option, option, false, selected.includes(option)));
+  }
+  select.size = Math.min(Math.max(all.length, 2), 4);
+  select.addEventListener('change', () => {
+    onChange([...select.selectedOptions].map((option) => option.value));
+    changed();
+  });
+  cell.appendChild(select);
+  return cell;
 }
 
 function rowAction(draft: { originalName: string | null; drop: boolean }, remove: () => void): HTMLTableCellElement {
@@ -185,9 +241,6 @@ function onDeleteCell(draft: ForeignKeyDraft): HTMLTableCellElement {
   return cell;
 }
 
-function splitCsv(value: string): string[] {
-  return value.split(',').map((part) => part.trim()).filter((part) => part !== '');
-}
 
 function buildRow(draft: ColumnDraft, index: number): HTMLTableRowElement {
   const row = document.createElement('tr');

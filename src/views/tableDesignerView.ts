@@ -97,13 +97,16 @@ export class TableDesignerView {
           })),
         };
       }
-      const driver = this.manager.getConnection(this.target.connectionName)?.driver ?? 'mysql';
+      const dbDriver = await this.manager.getDriver(this.target.connectionName);
+      const tables = await dbDriver.listTables(this.target.namespace);
+      const driverKind = this.manager.getConnection(this.target.connectionName)?.driver ?? 'mysql';
       this.post({
         type: 'init',
         mode: this.target.table ? 'modify' : 'create',
-        driver,
+        driver: driverKind,
         table: this.target.table ?? '',
         design,
+        tables,
       });
     } catch (error) {
       this.reportError(error);
@@ -121,6 +124,23 @@ export class TableDesignerView {
     }
     if (message.type === 'apply') {
       await this.apply(message.table, message.design);
+      return;
+    }
+    if (message.type === 'refColumns') {
+      await this.sendRefColumns(message.table);
+    }
+  }
+
+  private async sendRefColumns(table: string): Promise<void> {
+    if (!this.target || table.trim() === '') {
+      return;
+    }
+    try {
+      const driver = await this.manager.getDriver(this.target.connectionName);
+      const columns = await driver.listColumns(this.target.namespace, table);
+      this.post({ type: 'refColumns', table, columns: columns.map((column) => column.name) });
+    } catch (error) {
+      this.reportError(error);
     }
   }
 
@@ -210,7 +230,7 @@ export class TableDesignerView {
     <div class="section-title">Indexes</div>
     <table id="indexes">
       <thead>
-        <tr><th></th><th>Name</th><th>Unique</th><th>Columns (comma-separated)</th></tr>
+        <tr><th></th><th>Name</th><th>Unique</th><th>Columns</th></tr>
       </thead>
       <tbody id="indexesBody"></tbody>
     </table>
