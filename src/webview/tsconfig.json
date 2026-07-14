@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": []
   },
-  "include": ["grid.ts", "form.ts", "designer.ts", "../domain/**/*"]
+  "include": ["grid.ts", "form.ts", "designer.ts", "console.ts", "../domain/**/*"]
 }

@@ -7,6 +7,7 @@ import { ConnectionFormView } from './views/connectionFormView';
 import { ResultsView } from './views/resultsView';
 import { DataGridView } from './views/dataGridView';
 import { TableDesignerView } from './views/tableDesignerView';
+import { SqlConsoleView } from './views/sqlConsoleView';
 import { DDL_SCHEME, DdlContentProvider, buildDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
 
@@ -16,6 +17,7 @@ let formView: ConnectionFormView;
 let resultsView: ResultsView;
 let dataGridView: DataGridView;
 let designerView: TableDesignerView;
+let sqlConsoleView: SqlConsoleView;
 
 export function activate(context: vscode.ExtensionContext): void {
   manager = new ConnectionManager(context, new DriverFactory());
@@ -27,6 +29,7 @@ export function activate(context: vscode.ExtensionContext): void {
   resultsView = new ResultsView();
   dataGridView = new DataGridView(context, manager);
   designerView = new TableDesignerView(context, manager, () => treeProvider.refresh());
+  sqlConsoleView = new SqlConsoleView(context, manager);
 
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(DDL_SCHEME, new DdlContentProvider(manager)),
@@ -44,7 +47,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.modifyTable', (node?: SchemaNode) => modifyTable(node)),
     vscode.commands.registerCommand('dbStudio.createDatabase', (node?: SchemaNode) => createDatabase(node)),
     vscode.commands.registerCommand('dbStudio.dropDatabase', (node?: SchemaNode) => dropDatabase(node)),
+    vscode.commands.registerCommand('dbStudio.openSqlConsole', (node?: SchemaNode) => openSqlConsole(node)),
   );
+}
+
+async function openSqlConsole(node?: SchemaNode): Promise<void> {
+  const name = node ? node.connectionName : await pickConnectionName();
+  if (name) {
+    sqlConsoleView.open(name);
+  }
 }
 
 async function dropDatabase(node?: SchemaNode): Promise<void> {

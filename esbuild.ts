@@ -18,6 +18,7 @@ const webviewEntries: Array<[string, string]> = [
   ['src/webview/grid.ts', 'media/grid.js'],
   ['src/webview/form.ts', 'media/form.js'],
   ['src/webview/designer.ts', 'media/designer.js'],
+  ['src/webview/console.ts', 'media/console.js'],
 ];
 
 const webviewConfigs: esbuild.BuildOptions[] = webviewEntries.map(([entry, outfile]) => ({
