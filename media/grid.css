@@ -184,6 +184,21 @@ th.pk::after {
   font-size: 10px;
 }
 
+.th-label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.th-label:hover {
+  color: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
+}
+
+.sort-arrow {
+  margin-left: 4px;
+  font-size: 9px;
+  color: var(--vscode-focusBorder);
+}
+
 .col-resizer {
   position: absolute;
   top: 0;

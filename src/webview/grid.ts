@@ -48,6 +48,8 @@ const pageSizeInput = element<HTMLSelectElement>('pageSize');
 let total = 0;
 let offset = 0;
 let pageSize = 100;
+let orderColumn = '';
+let orderDir: 'ASC' | 'DESC' = 'ASC';
 
 commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
@@ -93,6 +95,8 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
     offset = message.offset;
     pageSize = message.pageSize;
     dateLocale = message.dateLocale;
+    orderColumn = message.orderColumn;
+    orderDir = message.orderDir;
     loadData(message.columns, message.pkColumns, message.rows);
     updatePager();
     return;
@@ -188,7 +192,17 @@ function buildHead(): HTMLTableSectionElement {
   row.appendChild(document.createElement('th'));
   columns.forEach((column, index) => {
     const cell = document.createElement('th');
-    cell.textContent = column.name;
+    const label = document.createElement('span');
+    label.className = 'th-label';
+    label.textContent = column.name;
+    if (column.name === orderColumn) {
+      const arrow = document.createElement('span');
+      arrow.className = 'sort-arrow';
+      arrow.textContent = orderDir === 'ASC' ? '▲' : '▼';
+      label.appendChild(arrow);
+    }
+    label.addEventListener('click', () => cycleSort(column.name));
+    cell.appendChild(label);
     if (column.isPrimaryKey) {
       cell.classList.add('pk');
     }
@@ -197,6 +211,20 @@ function buildHead(): HTMLTableSectionElement {
   });
   head.appendChild(row);
   return head;
+}
+
+// Click a header to sort server-side: none → ASC → DESC → none.
+function cycleSort(column: string): void {
+  let next = column;
+  let direction: 'ASC' | 'DESC' = 'ASC';
+  if (orderColumn === column) {
+    if (orderDir === 'ASC') {
+      direction = 'DESC';
+    } else {
+      next = '';
+    }
+  }
+  api.postMessage({ type: 'sort', column: next, direction });
 }
 
 // Excel-like column sizing: drag the right edge to widen/narrow, double-click to auto-fit.

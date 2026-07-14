@@ -16,6 +16,9 @@ export interface GridDataMessage {
   pageSize: number;
   /** Locale for displaying date columns (empty = raw ISO). */
   dateLocale: string;
+  /** Current server-side sort (empty column = unsorted). */
+  orderColumn: string;
+  orderDir: 'ASC' | 'DESC';
 }
 
 export interface GridErrorMessage {
@@ -58,4 +61,17 @@ export interface PageMessage {
   pageSize: number;
 }
 
-export type WebviewToExtension = ReadyMessage | ReloadMessage | CommitMessage | FilterMessage | PageMessage;
+/** Sort by a column server-side (empty column clears the sort). */
+export interface SortMessage {
+  type: 'sort';
+  column: string;
+  direction: 'ASC' | 'DESC';
+}
+
+export type WebviewToExtension =
+  | ReadyMessage
+  | ReloadMessage
+  | CommitMessage
+  | FilterMessage
+  | PageMessage
+  | SortMessage;
