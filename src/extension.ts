@@ -6,6 +6,7 @@ import { ConnectionIconProvider } from './views/connectionIconProvider';
 import { ConnectionFormView } from './views/connectionFormView';
 import { ResultsView } from './views/resultsView';
 import { DataGridView } from './views/dataGridView';
+import { DDL_SCHEME, DdlContentProvider, buildDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
 
 let manager: ConnectionManager;
@@ -25,6 +26,7 @@ export function activate(context: vscode.ExtensionContext): void {
   dataGridView = new DataGridView(context, manager);
 
   context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(DDL_SCHEME, new DdlContentProvider(manager)),
     vscode.window.registerTreeDataProvider('dbStudio.explorer', treeProvider),
     vscode.commands.registerCommand('dbStudio.addConnection', () => formView.open()),
     vscode.commands.registerCommand('dbStudio.editConnection', (node?: SchemaNode) => editConnection(node)),
@@ -101,9 +103,10 @@ async function showTableDdl(node?: SchemaNode): Promise<void> {
     return;
   }
   try {
-    const driver = await manager.getDriver(node.connectionName);
-    const ddl = await driver.getTableDdl(node.namespace, node.table);
-    const document = await vscode.workspace.openTextDocument({ content: ddl, language: 'sql' });
+    const document = await vscode.workspace.openTextDocument(
+      buildDdlUri(node.connectionName, node.namespace, node.table),
+    );
+    await vscode.languages.setTextDocumentLanguage(document, 'sql');
     await vscode.window.showTextDocument(document, { preview: true });
   } catch (error) {
     reportError(error);
