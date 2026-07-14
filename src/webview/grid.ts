@@ -51,9 +51,17 @@ let pageSize = 100;
 
 commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
-filterInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    api.postMessage({ type: 'filter', value: filterInput.value });
+// The 'search' event fires on Enter and when the native clear (×) is clicked.
+filterInput.addEventListener('search', () => api.postMessage({ type: 'filter', value: filterInput.value }));
+
+// Ctrl/Cmd+C on a focused cell copies its whole value when nothing is selected.
+document.addEventListener('keydown', (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.key !== 'c') {
+    return;
+  }
+  const active = document.activeElement;
+  if (active instanceof HTMLInputElement && active.closest('td') && active.selectionStart === active.selectionEnd) {
+    void navigator.clipboard.writeText(active.value);
   }
 });
 pagerFirst.addEventListener('click', () => goToOffset(0));
@@ -327,10 +335,10 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   const cell = document.createElement('td');
   const input = document.createElement('input');
   const isJson = editable && column.type.toLowerCase().includes('json');
-  const isDate = editable && !isJson && isDateColumn(column.type);
+  const dateType = editable && !isJson ? dateInputType(column.type) : null;
   const value = model.values[column.name];
-  // Dates show formatted (e.g. French) but are edited raw (unambiguous ISO).
-  input.value = isDate ? formatDate(value, dateLocale) : value ?? '';
+  // Dates display formatted; a double-click swaps to a native date field for editing.
+  input.value = dateType ? formatDate(value, dateLocale) : value ?? '';
   // Excel-like: cells are in display mode; a double-click starts editing.
   input.readOnly = true;
   if (isGenerated) {
@@ -343,7 +351,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     }
   }
   input.addEventListener('input', () => {
-    model.values[column.name] = readInput(input, column);
+    model.values[column.name] = dateType ? fromDateInputValue(input, column, dateType) : readInput(input, column);
     input.classList.toggle('null', model.values[column.name] === null);
     applyCellState(cell, model, column);
     refreshPending();
@@ -352,7 +360,9 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   input.addEventListener('blur', () => {
     cell.classList.remove('focused');
     input.readOnly = true;
-    if (isDate) {
+    if (dateType) {
+      // Back to the formatted display.
+      input.type = 'text';
       input.value = formatDate(model.values[column.name], dateLocale);
     }
   });
@@ -362,17 +372,26 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     input.addEventListener('dblclick', () => openJsonModal(model, column, input, cell));
   } else if (editable) {
     input.addEventListener('dblclick', () => {
-      if (isDate) {
-        input.value = model.values[column.name] ?? '';
+      if (dateType) {
+        input.type = dateType;
+        if (dateType === 'datetime-local') {
+          input.step = '1';
+        }
+        input.value = toDateInputValue(model.values[column.name], dateType);
+        input.readOnly = false;
+        input.focus();
+      } else {
+        beginInlineEdit(input);
       }
-      beginInlineEdit(input);
     });
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         input.blur();
       } else if (event.key === 'Escape') {
         model.values[column.name] = value;
-        input.value = isDate ? formatDate(value, dateLocale) : value ?? '';
+        if (!dateType) {
+          input.value = value ?? '';
+        }
         applyCellState(cell, model, column);
         refreshPending();
         input.blur();
@@ -395,6 +414,32 @@ function beginInlineEdit(input: HTMLInputElement): void {
 function isDateColumn(type: string): boolean {
   const normalized = type.toLowerCase();
   return normalized === 'date' || normalized.includes('timestamp') || normalized.includes('datetime');
+}
+
+function dateInputType(type: string): 'date' | 'datetime-local' | null {
+  if (!isDateColumn(type)) {
+    return null;
+  }
+  return type.toLowerCase() === 'date' ? 'date' : 'datetime-local';
+}
+
+// Raw 'YYYY-MM-DD[ HH:MM:SS]' → the value a <input type=date|datetime-local> expects.
+function toDateInputValue(value: CellValue, dateType: 'date' | 'datetime-local'): string {
+  if (value === null) {
+    return '';
+  }
+  if (dateType === 'date') {
+    return value.slice(0, 10);
+  }
+  return value.replace('T', ' ').slice(0, 19).replace(' ', 'T');
+}
+
+// Native date field value → the raw 'YYYY-MM-DD[ HH:MM:SS]' stored for the UPDATE.
+function fromDateInputValue(input: HTMLInputElement, column: ColumnMeta, dateType: 'date' | 'datetime-local'): CellValue {
+  if (input.value === '') {
+    return column.isNullable ? null : '';
+  }
+  return dateType === 'date' ? input.value : input.value.replace('T', ' ');
 }
 
 // Display a raw 'YYYY-MM-DD[ HH:MM:SS]' value using the configured locale (empty = raw ISO).

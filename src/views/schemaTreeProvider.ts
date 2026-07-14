@@ -36,9 +36,6 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     if (node.kind === 'namespace') {
       return this.buildTableNodes(node);
     }
-    if (node.kind === 'table') {
-      return this.buildColumnNodes(node);
-    }
     return Promise.resolve([]);
   }
 
@@ -76,21 +73,4 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     });
   }
 
-  private async buildColumnNodes(parent: SchemaNode): Promise<SchemaNode[]> {
-    const driver = await this.manager.getDriver(parent.connectionName);
-    const columns = await driver.listColumns(parent.namespace!, parent.table!);
-    return columns.map((column) => {
-      const node = new SchemaNode(
-        'column',
-        column.name,
-        vscode.TreeItemCollapsibleState.None,
-        parent.connectionName,
-        parent.namespace,
-        parent.table,
-      );
-      node.description = `${column.type} · ${column.isNullable ? 'null' : 'not null'}`;
-      node.iconPath = new vscode.ThemeIcon(column.isPrimaryKey ? 'key' : 'symbol-field');
-      return node;
-    });
-  }
 }

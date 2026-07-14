@@ -434,3 +434,8 @@ body.resizing input {
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
 }
+
+.modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
