@@ -30,8 +30,8 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Connection color cue (3px strip on windows) + live re-tint on color change
 - [x] Red highlight for rows pending deletion; drop uncommitted new rows on delete
 - [x] Horizontal scroll (table width synced to columns on resize)
-- [x] Free-text filter (server-side, across all columns)
-- [x] Pagination (page size + first / prev / next / last)
+- [x] Filter = raw SQL `WHERE` condition, run on Enter (server-side)
+- [x] Pagination (page size 10/20/50/100/500/No + first / prev / next / last)
 - [ ] Hide / show columns
 - [ ] Edit a cell on double-click only (not single click)
 - [ ] Better JSON cell editor (expanded / modal)

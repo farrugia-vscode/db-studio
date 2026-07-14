@@ -103,10 +103,6 @@ export class PostgresDriver implements DatabaseDriver {
     return `$${index}`;
   }
 
-  likeOperator(): string {
-    return 'ILIKE';
-  }
-
   async query(sql: string, params?: unknown[]): Promise<QueryResult> {
     await this.connect();
     const result = await this.client!.query(sql, params);

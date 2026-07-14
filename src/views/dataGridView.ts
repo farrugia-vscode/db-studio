@@ -32,7 +32,7 @@ export class DataGridView {
     this.target = target;
     this.filter = '';
     this.offset = 0;
-    this.pageSize = vscode.workspace.getConfiguration('dbStudio').get<number>('rowLimit', 200);
+    this.pageSize = 100;
     if (!this.panel) {
       this.createPanel();
     }
@@ -94,21 +94,18 @@ export class DataGridView {
       const pkColumns = columns.filter((column) => column.isPrimaryKey).map((column) => column.name);
       const ref = driver.buildTableRef(this.target.namespace, this.target.table);
 
-      // Free-text filter: match against every column concatenated, server-side.
-      const where = this.filter
-        ? `WHERE CONCAT_WS(' ', ${columns.map((column) => driver.quoteIdentifier(column.name)).join(', ')}) ${driver.likeOperator()} ${driver.placeholder(1)}`
-        : '';
-      const params = this.filter ? [`%${this.filter}%`] : [];
+      // The filter is a raw SQL condition (PHPStorm-style), used as the WHERE clause.
+      const where = this.filter.trim() ? `WHERE ${this.filter}` : '';
 
-      const countResult = await driver.query(`SELECT COUNT(*) AS total FROM ${ref} ${where}`, params);
+      const countResult = await driver.query(`SELECT COUNT(*) AS total FROM ${ref} ${where}`);
       const total = Number(countResult.rows[0]?.total ?? 0);
-      // Keep the offset on a valid page start if the filter shrank the result set.
-      this.offset = total === 0 ? 0 : Math.min(this.offset, Math.floor((total - 1) / this.pageSize) * this.pageSize);
 
-      const result = await driver.query(
-        `SELECT * FROM ${ref} ${where} LIMIT ${this.pageSize} OFFSET ${this.offset}`,
-        params,
-      );
+      const paged = this.pageSize > 0;
+      // Keep the offset on a valid page start if the filter shrank the result set.
+      this.offset = paged && total > 0 ? Math.min(this.offset, Math.floor((total - 1) / this.pageSize) * this.pageSize) : 0;
+      const limitClause = paged ? `LIMIT ${this.pageSize} OFFSET ${this.offset}` : '';
+
+      const result = await driver.query(`SELECT * FROM ${ref} ${where} ${limitClause}`);
       this.post({
         type: 'data',
         table: this.target.table,
@@ -177,7 +174,7 @@ export class DataGridView {
 </head>
 <body>
   <div class="toolbar">
-    <input id="filter" type="search" placeholder="Filter…" spellcheck="false">
+    <input id="filter" type="search" placeholder="WHERE condition — e.g. name = 'Paris Taxi'  ·  Enter to run" spellcheck="false">
     <button id="commit" class="primary" disabled>Commit</button>
     <span id="status"></span>
     <button id="reload" title="Reload from the database (discards unsaved changes)">Reload</button>
@@ -190,7 +187,16 @@ export class DataGridView {
     <span id="pagerInfo"></span>
     <button id="pagerNext" title="Next page">›</button>
     <button id="pagerLast" title="Last page">⏭</button>
-    <span class="pager-size">Rows: <input id="pageSize" type="number" min="1" step="50"></span>
+    <span class="pager-size">Rows:
+      <select id="pageSize">
+        <option>10</option>
+        <option>20</option>
+        <option>50</option>
+        <option>100</option>
+        <option>500</option>
+        <option value="No">No</option>
+      </select>
+    </span>
   </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

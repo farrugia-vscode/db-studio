@@ -82,10 +82,6 @@ export class MysqlDriver implements DatabaseDriver {
     return '?';
   }
 
-  likeOperator(): string {
-    return 'LIKE';
-  }
-
   async query(sql: string, params?: unknown[]): Promise<QueryResult> {
     await this.connect();
     const [result, fields] = await this.connection!.query(sql, params);

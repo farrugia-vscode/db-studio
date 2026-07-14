@@ -42,25 +42,25 @@ const pagerPrev = element<HTMLButtonElement>('pagerPrev');
 const pagerNext = element<HTMLButtonElement>('pagerNext');
 const pagerLast = element<HTMLButtonElement>('pagerLast');
 const pagerInfo = element<HTMLSpanElement>('pagerInfo');
-const pageSizeInput = element<HTMLInputElement>('pageSize');
+const pageSizeInput = element<HTMLSelectElement>('pageSize');
 
 let total = 0;
 let offset = 0;
-let pageSize = 200;
-let filterTimer = 0;
+let pageSize = 100;
 
 commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
-filterInput.addEventListener('input', () => {
-  clearTimeout(filterTimer);
-  filterTimer = window.setTimeout(() => api.postMessage({ type: 'filter', value: filterInput.value }), 300);
+filterInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    api.postMessage({ type: 'filter', value: filterInput.value });
+  }
 });
 pagerFirst.addEventListener('click', () => goToOffset(0));
 pagerPrev.addEventListener('click', () => goToOffset(offset - pageSize));
 pagerNext.addEventListener('click', () => goToOffset(offset + pageSize));
 pagerLast.addEventListener('click', () => goToOffset(lastOffset()));
 pageSizeInput.addEventListener('change', () => {
-  api.postMessage({ type: 'page', offset: 0, pageSize: Math.max(1, parseInt(pageSizeInput.value, 10) || pageSize) });
+  api.postMessage({ type: 'page', offset: 0, pageSize: pageSizeInput.value === 'No' ? 0 : parseInt(pageSizeInput.value, 10) });
 });
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
@@ -97,14 +97,14 @@ function goToOffset(next: number): void {
 }
 
 function lastOffset(): number {
-  return total === 0 ? 0 : Math.floor((total - 1) / pageSize) * pageSize;
+  return total === 0 || pageSize === 0 ? 0 : Math.floor((total - 1) / pageSize) * pageSize;
 }
 
 function updatePager(): void {
-  pageSizeInput.value = String(pageSize);
+  pageSizeInput.value = pageSize === 0 ? 'No' : String(pageSize);
   pagerInfo.textContent = `${total === 0 ? 0 : offset + 1}–${offset + rowModels.length} of ${total}`;
-  const atStart = offset === 0;
-  const atEnd = offset + pageSize >= total;
+  const atStart = pageSize === 0 || offset === 0;
+  const atEnd = pageSize === 0 || offset + pageSize >= total;
   pagerFirst.disabled = atStart;
   pagerPrev.disabled = atStart;
   pagerNext.disabled = atEnd;
