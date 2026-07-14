@@ -1,4 +1,4 @@
-import type { ColumnMeta, QueryResult } from './types';
+import type { ColumnDraft, ColumnMeta, QueryResult } from './types';
 
 /**
  * Driver capabilities are split into focused interfaces (ISP) so each consumer
@@ -33,4 +33,10 @@ export interface SqlDialect {
   placeholder(index: number): string;
 }
 
-export interface DatabaseDriver extends Connectable, SchemaIntrospector, StatementExecutor, SqlDialect {}
+/** Generates DDL for creating and altering tables (dialect-specific). */
+export interface SchemaMutator {
+  buildCreateTable(namespace: string, table: string, columns: ColumnDraft[]): string;
+  buildAlterTable(namespace: string, table: string, original: ColumnMeta[], edited: ColumnDraft[]): string[];
+}
+
+export interface DatabaseDriver extends Connectable, SchemaIntrospector, StatementExecutor, SqlDialect, SchemaMutator {}

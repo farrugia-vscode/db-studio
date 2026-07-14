@@ -17,6 +17,7 @@ const extensionConfig: esbuild.BuildOptions = {
 const webviewEntries: Array<[string, string]> = [
   ['src/webview/grid.ts', 'media/grid.js'],
   ['src/webview/form.ts', 'media/form.js'],
+  ['src/webview/designer.ts', 'media/designer.js'],
 ];
 
 const webviewConfigs: esbuild.BuildOptions[] = webviewEntries.map(([entry, outfile]) => ({

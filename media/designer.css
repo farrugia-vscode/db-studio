@@ -1,0 +1,164 @@
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+
+.bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.bar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.bar input {
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.bar button,
+#addColumn {
+  cursor: pointer;
+  border: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border-radius: 4px;
+  padding: 5px 16px;
+  font-size: 12px;
+}
+
+.bar button.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border-color: var(--vscode-button-background);
+}
+
+.notice {
+  padding: 6px 20px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.notice.error {
+  color: var(--vscode-errorForeground);
+}
+
+.notice:empty {
+  display: none;
+}
+
+#columnsWrap {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--vscode-panel-border);
+  text-align: left;
+  padding: 0;
+}
+
+th {
+  padding: 6px 10px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+}
+
+td input[type='text'],
+td input:not([type]) {
+  width: 100%;
+  min-width: 120px;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--vscode-foreground);
+  padding: 6px 10px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+}
+
+td input:focus {
+  background: var(--vscode-input-background);
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+td.check {
+  text-align: center;
+}
+
+td.actions {
+  text-align: center;
+}
+
+td.actions button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font-size: 14px;
+  padding: 2px 8px;
+}
+
+tr.dropped td {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+#addColumn {
+  color: var(--vscode-descriptionForeground);
+}
+
+.sql {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.sql:empty {
+  display: none;
+}

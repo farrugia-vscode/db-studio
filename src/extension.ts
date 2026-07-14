@@ -6,6 +6,7 @@ import { ConnectionIconProvider } from './views/connectionIconProvider';
 import { ConnectionFormView } from './views/connectionFormView';
 import { ResultsView } from './views/resultsView';
 import { DataGridView } from './views/dataGridView';
+import { TableDesignerView } from './views/tableDesignerView';
 import { DDL_SCHEME, DdlContentProvider, buildDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
 
@@ -14,6 +15,7 @@ let treeProvider: SchemaTreeProvider;
 let formView: ConnectionFormView;
 let resultsView: ResultsView;
 let dataGridView: DataGridView;
+let designerView: TableDesignerView;
 
 export function activate(context: vscode.ExtensionContext): void {
   manager = new ConnectionManager(context, new DriverFactory());
@@ -24,6 +26,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   resultsView = new ResultsView();
   dataGridView = new DataGridView(context, manager);
+  designerView = new TableDesignerView(context, manager, () => treeProvider.refresh());
 
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(DDL_SCHEME, new DdlContentProvider(manager)),
@@ -37,7 +40,23 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.showTableDdl', (node?: SchemaNode) => showTableDdl(node)),
     vscode.commands.registerCommand('dbStudio.emptyTable', (node?: SchemaNode) => emptyTable(node)),
     vscode.commands.registerCommand('dbStudio.dropTable', (node?: SchemaNode) => dropTable(node)),
+    vscode.commands.registerCommand('dbStudio.createTable', (node?: SchemaNode) => createTable(node)),
+    vscode.commands.registerCommand('dbStudio.modifyTable', (node?: SchemaNode) => modifyTable(node)),
   );
+}
+
+async function createTable(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'namespace' || !node.namespace) {
+    return;
+  }
+  await designerView.open({ connectionName: node.connectionName, namespace: node.namespace });
+}
+
+async function modifyTable(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'table' || !node.namespace || !node.table) {
+    return;
+  }
+  await designerView.open({ connectionName: node.connectionName, namespace: node.namespace, table: node.table });
 }
 
 export async function deactivate(): Promise<void> {
