@@ -24,6 +24,7 @@ let pkColumns: string[] = [];
 let rowModels: RowModel[] = [];
 let hasPrimaryKey = false;
 let colElements: HTMLTableColElement[] = [];
+let dateLocale = '';
 
 const MIN_WIDTH = 56;
 const INITIAL_MAX_WIDTH = 360;
@@ -66,7 +67,6 @@ pageSizeInput.addEventListener('change', () => {
 const jsonModal = element<HTMLDivElement>('jsonModal');
 const jsonModalText = element<HTMLTextAreaElement>('jsonModalText');
 const jsonStatus = element<HTMLSpanElement>('jsonStatus');
-const jsonFormat = element<HTMLButtonElement>('jsonFormat');
 const jsonModalSave = element<HTMLButtonElement>('jsonModalSave');
 const jsonModalCancel = element<HTMLButtonElement>('jsonModalCancel');
 
@@ -74,8 +74,8 @@ let jsonTarget: { model: RowModel; column: ColumnMeta; input: HTMLInputElement; 
 
 jsonModalSave.addEventListener('click', saveJsonModal);
 jsonModalCancel.addEventListener('click', closeJsonModal);
-jsonFormat.addEventListener('click', formatJsonModal);
 jsonModalText.addEventListener('input', validateJsonModal);
+jsonModalText.addEventListener('keydown', onJsonKeydown);
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
@@ -84,6 +84,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
     total = message.total;
     offset = message.offset;
     pageSize = message.pageSize;
+    dateLocale = message.dateLocale;
     loadData(message.columns, message.pkColumns, message.rows);
     updatePager();
     return;
@@ -247,10 +248,12 @@ function measureColumn(index: number, maxWidth: number): number {
   }
   measureCtx.font = cellFont;
   const column = columns[index];
+  const isDate = isDateColumn(column.type);
   let widest = measureCtx.measureText(column.name).width + (column.isPrimaryKey ? 16 : 0);
   for (const model of rowModels) {
     const value = model.values[column.name];
-    const width = measureCtx.measureText(value ?? 'NULL').width;
+    const text = isDate && value !== null ? formatDate(value, dateLocale) : value ?? 'NULL';
+    const width = measureCtx.measureText(text).width;
     if (width > widest) {
       widest = width;
     }
@@ -324,17 +327,10 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   const cell = document.createElement('td');
   const input = document.createElement('input');
   const isJson = editable && column.type.toLowerCase().includes('json');
-  const dateType = editable && !isJson ? dateInputType(column.type) : null;
+  const isDate = editable && !isJson && isDateColumn(column.type);
   const value = model.values[column.name];
-  if (dateType) {
-    input.type = dateType;
-    if (dateType === 'datetime-local') {
-      input.step = '1';
-    }
-    input.value = toDateInputValue(value, dateType);
-  } else {
-    input.value = value ?? '';
-  }
+  // Dates show formatted (e.g. French) but are edited raw (unambiguous ISO).
+  input.value = isDate ? formatDate(value, dateLocale) : value ?? '';
   // Excel-like: cells are in display mode; a double-click starts editing.
   input.readOnly = true;
   if (isGenerated) {
@@ -347,7 +343,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     }
   }
   input.addEventListener('input', () => {
-    model.values[column.name] = dateType ? fromDateInputValue(input, column, dateType) : readInput(input, column);
+    model.values[column.name] = readInput(input, column);
     input.classList.toggle('null', model.values[column.name] === null);
     applyCellState(cell, model, column);
     refreshPending();
@@ -356,19 +352,27 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   input.addEventListener('blur', () => {
     cell.classList.remove('focused');
     input.readOnly = true;
+    if (isDate) {
+      input.value = formatDate(model.values[column.name], dateLocale);
+    }
   });
 
   if (isJson) {
     input.classList.add('json');
     input.addEventListener('dblclick', () => openJsonModal(model, column, input, cell));
   } else if (editable) {
-    input.addEventListener('dblclick', () => beginInlineEdit(input));
+    input.addEventListener('dblclick', () => {
+      if (isDate) {
+        input.value = model.values[column.name] ?? '';
+      }
+      beginInlineEdit(input);
+    });
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         input.blur();
       } else if (event.key === 'Escape') {
-        input.value = dateType ? toDateInputValue(value, dateType) : value ?? '';
         model.values[column.name] = value;
+        input.value = isDate ? formatDate(value, dateLocale) : value ?? '';
         applyCellState(cell, model, column);
         refreshPending();
         input.blur();
@@ -383,36 +387,30 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
 function beginInlineEdit(input: HTMLInputElement): void {
   input.readOnly = false;
   input.focus();
-  input.select();
+  // Cursor at the end of the text rather than selecting everything.
+  const end = input.value.length;
+  input.setSelectionRange(end, end);
 }
 
-function dateInputType(type: string): 'date' | 'datetime-local' | null {
+function isDateColumn(type: string): boolean {
   const normalized = type.toLowerCase();
-  if (normalized === 'date') {
-    return 'date';
-  }
-  if (normalized.includes('timestamp') || normalized.includes('datetime')) {
-    return 'datetime-local';
-  }
-  return null;
+  return normalized === 'date' || normalized.includes('timestamp') || normalized.includes('datetime');
 }
 
-function toDateInputValue(value: CellValue, dateType: 'date' | 'datetime-local'): string {
+// Display a raw 'YYYY-MM-DD[ HH:MM:SS]' value using the configured locale (empty = raw ISO).
+function formatDate(value: CellValue, locale: string): string {
   if (value === null) {
     return '';
   }
-  if (dateType === 'date') {
-    return value.slice(0, 10);
+  if (!locale) {
+    return value;
   }
-  // Normalize 'YYYY-MM-DD HH:MM:SS' or ISO into the datetime-local format.
-  return value.replace('T', ' ').slice(0, 19).replace(' ', 'T');
-}
-
-function fromDateInputValue(input: HTMLInputElement, column: ColumnMeta, dateType: 'date' | 'datetime-local'): CellValue {
-  if (input.value === '') {
-    return column.isNullable ? null : '';
+  const hasTime = value.length > 10;
+  const parsed = new Date(hasTime ? value.replace(' ', 'T') : `${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
   }
-  return dateType === 'date' ? input.value : input.value.replace('T', ' ');
+  return hasTime ? parsed.toLocaleString(locale) : parsed.toLocaleDateString(locale);
 }
 
 // Parses `enum('a','b','c')` (MySQL) into its allowed values, or null if not an enum.
@@ -494,15 +492,41 @@ function validateJsonModal(): boolean {
   }
 }
 
-function formatJsonModal(): void {
-  const text = jsonModalText.value.trim();
-  if (text !== '') {
-    try {
-      jsonModalText.value = JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      // Invalid JSON — leave the text untouched; the status already flags it.
-    }
+// Editor-like behaviour in the JSON textarea: Enter keeps/extends indentation, Tab inserts spaces.
+function onJsonKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    autoIndentNewline();
+  } else if (event.key === 'Tab') {
+    event.preventDefault();
+    insertAtCursor('  ');
   }
+}
+
+function autoIndentNewline(): void {
+  const value = jsonModalText.value;
+  const start = jsonModalText.selectionStart;
+  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+  const indent = /^[ \t]*/.exec(value.slice(lineStart, start))?.[0] ?? '';
+  const opensBlock = value[start - 1] === '{' || value[start - 1] === '[';
+  const closesAfter = value[start] === '}' || value[start] === ']';
+  if (opensBlock && closesAfter) {
+    const inner = `${indent}  `;
+    replaceSelection(`\n${inner}\n${indent}`, start + 1 + inner.length);
+  } else {
+    const insert = `\n${indent}${opensBlock ? '  ' : ''}`;
+    replaceSelection(insert, start + insert.length);
+  }
+}
+
+function insertAtCursor(text: string): void {
+  replaceSelection(text, jsonModalText.selectionStart + text.length);
+}
+
+function replaceSelection(text: string, caret: number): void {
+  const value = jsonModalText.value;
+  jsonModalText.value = value.slice(0, jsonModalText.selectionStart) + text + value.slice(jsonModalText.selectionEnd);
+  jsonModalText.selectionStart = jsonModalText.selectionEnd = caret;
   validateJsonModal();
 }
 

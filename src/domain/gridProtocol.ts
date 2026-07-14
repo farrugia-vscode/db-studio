@@ -14,6 +14,8 @@ export interface GridDataMessage {
   total: number;
   offset: number;
   pageSize: number;
+  /** Locale for displaying date columns (empty = raw ISO). */
+  dateLocale: string;
 }
 
 export interface GridErrorMessage {

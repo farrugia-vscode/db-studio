@@ -211,13 +211,16 @@ td input {
   font-size: 13px;
 }
 
-td input:focus {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+td input:read-only {
+  cursor: default;
 }
 
-td input:read-only {
-  color: var(--vscode-descriptionForeground);
+/* Editing state (after a double-click): clearly distinct from the selected/display state. */
+td input:not(:read-only) {
+  background: var(--vscode-input-background);
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+  cursor: text;
 }
 
 td input.null,

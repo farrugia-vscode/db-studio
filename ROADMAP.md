@@ -34,9 +34,10 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Filter = raw SQL `WHERE` condition, run on Enter (server-side)
 - [x] Pagination (page size 10/20/50/100/500/No + first / prev / next / last)
 - [x] Edit a cell on double-click (single click selects / highlights)
-- [x] JSON cell editor in a modal (validate + pretty-print)
+- [x] JSON cell editor: modal, live validity, editor-like auto-indent (Enter/Tab)
 - [x] Enum columns edited via a dropdown
-- [ ] Date / datetime picker (MySQL now returns raw date strings)
+- [x] Date columns: locale-formatted display (`dbStudio.dateLocale`), raw ISO editing
+- [x] Columns auto-fit to content on load, capped at a max width
 - [ ] Multi-cell selection & fill (Excel-style) — to spec later
 - [ ] Hide / show columns
 - [ ] Sort by column (click header)

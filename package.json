@@ -2,7 +2,7 @@
   "name": "db-studio",
   "displayName": "DB Studio",
   "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL)",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "farrugia",
   "icon": "icon.png",
   "engines": {
@@ -168,10 +168,10 @@
             }
           }
         },
-        "dbStudio.rowLimit": {
-          "type": "number",
-          "default": 200,
-          "description": "Maximum number of rows fetched when opening table data."
+        "dbStudio.dateLocale": {
+          "type": "string",
+          "default": "",
+          "description": "Locale for displaying date/time columns (e.g. fr-FR, en-US). Empty = raw value (YYYY-MM-DD HH:MM:SS)."
         }
       }
     }
