@@ -27,7 +27,7 @@ let colElements: HTMLTableColElement[] = [];
 
 const MIN_WIDTH = 56;
 const INITIAL_MAX_WIDTH = 360;
-const CELL_PADDING = 26;
+const CELL_PADDING = 34;
 const measureCtx = document.createElement('canvas').getContext('2d');
 let cellFont = '12px monospace';
 

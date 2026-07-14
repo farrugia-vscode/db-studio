@@ -1,6 +1,6 @@
 :root {
-  --cell-px: 12px;
-  --cell-py: 7px;
+  --cell-px: 16px;
+  --cell-py: 11px;
   --conn: transparent;
 }
 
@@ -31,8 +31,8 @@ body.tinted::before {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
+  gap: 12px;
+  padding: 12px 20px;
   background: var(--vscode-editorWidget-background);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
@@ -91,8 +91,8 @@ body.tinted::before {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
+  gap: 10px;
+  padding: 10px 20px;
   border-top: 1px solid var(--vscode-panel-border);
   background: var(--vscode-editorWidget-background);
   font-size: 12px;
@@ -139,7 +139,7 @@ body.tinted::before {
 /* ---- Notice ---- */
 .notice {
   flex: 0 0 auto;
-  padding: 6px 16px;
+  padding: 8px 20px;
   font-size: 12px;
   color: var(--vscode-descriptionForeground);
 }
