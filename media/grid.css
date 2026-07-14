@@ -99,6 +99,55 @@ body {
   cursor: pointer;
 }
 
+.col-visibility {
+  position: relative;
+  display: inline-flex;
+}
+
+.col-visibility #colMenuToggle {
+  cursor: pointer;
+  border: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.col-menu {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.col-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.col-menu label:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.col-menu input {
+  cursor: pointer;
+}
+
 /* ---- Pager ---- */
 #pager {
   flex: 0 0 auto;

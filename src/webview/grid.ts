@@ -20,6 +20,9 @@ interface RowModel {
 }
 
 let columns: ColumnMeta[] = [];
+// The columns actually shown (columns minus the user-hidden ones); rebuilt on each render.
+let renderColumns: ColumnMeta[] = [];
+const hiddenColumns = new Set<string>();
 let pkColumns: string[] = [];
 let rowModels: RowModel[] = [];
 let hasPrimaryKey = false;
@@ -45,6 +48,8 @@ const pagerLast = element<HTMLButtonElement>('pagerLast');
 const pagerInfo = element<HTMLSpanElement>('pagerInfo');
 const pageSizeInput = element<HTMLSelectElement>('pageSize');
 const copyFormatSelect = element<HTMLSelectElement>('copyFormat');
+const colMenuToggle = element<HTMLButtonElement>('colMenuToggle');
+const colMenu = element<HTMLDivElement>('colMenu');
 
 let total = 0;
 let offset = 0;
@@ -67,6 +72,20 @@ commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 // The 'search' event fires on Enter and when the native clear (×) is clicked.
 filterInput.addEventListener('search', () => api.postMessage({ type: 'filter', value: filterInput.value }));
+
+colMenuToggle.addEventListener('click', (event) => {
+  event.stopPropagation();
+  colMenu.hidden = !colMenu.hidden;
+  if (!colMenu.hidden) {
+    buildColMenu();
+  }
+});
+// Click anywhere else closes the column menu.
+document.addEventListener('mousedown', (event) => {
+  if (!colMenu.hidden && !colMenu.contains(event.target as Node) && event.target !== colMenuToggle) {
+    colMenu.hidden = true;
+  }
+});
 
 grid.addEventListener('mousedown', onGridMouseDown);
 grid.addEventListener('mousemove', onGridMouseMove);
@@ -133,6 +152,27 @@ function onGridKeydown(event: KeyboardEvent): void {
   } else if (key === 'v') {
     event.preventDefault();
     void pasteSelection();
+  }
+}
+
+// A checklist of every column; unchecking one hides it from the grid (session-only).
+function buildColMenu(): void {
+  colMenu.replaceChildren();
+  for (const column of columns) {
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = !hiddenColumns.has(column.name);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        hiddenColumns.delete(column.name);
+      } else {
+        hiddenColumns.add(column.name);
+      }
+      render();
+    });
+    label.append(checkbox, document.createTextNode(column.name));
+    colMenu.appendChild(label);
   }
 }
 
@@ -207,7 +247,7 @@ function copySelection(): void {
   }
   const cols: string[] = [];
   for (let c = rect.c1; c <= rect.c2; c += 1) {
-    cols.push(columns[c].name);
+    cols.push(renderColumns[c].name);
   }
   const rows: Array<Array<string | null>> = [];
   for (let r = rect.r1; r <= rect.r2; r += 1) {
@@ -228,7 +268,7 @@ function fillDown(): void {
   const anchor = selAnchor;
   const focus = selFocus;
   for (let c = rect.c1; c <= rect.c2; c += 1) {
-    const name = columns[c].name;
+    const name = renderColumns[c].name;
     const topValue = rowModels[rect.r1]?.values[name] ?? null;
     for (let r = rect.r1 + 1; r <= rect.r2; r += 1) {
       const model = rowModels[r];
@@ -260,7 +300,7 @@ async function pasteSelection(): Promise<void> {
       return;
     }
     line.split('\t').forEach((cellValue, colOffset) => {
-      const column = columns[rect.c1 + colOffset];
+      const column = renderColumns[rect.c1 + colOffset];
       if (column) {
         model.values[column.name] = cellValue === '' && column.isNullable ? null : cellValue;
       }
@@ -349,6 +389,8 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
   pkColumns = nextPkColumns;
   hasPrimaryKey = nextPkColumns.length > 0;
   rowModels = rows.map((row) => ({ values: toCellRow(row), original: toCellRow(row), deleted: false }));
+  hiddenColumns.clear();
+  colMenu.hidden = true;
   undoStack = [];
   redoStack = [];
   notice.classList.remove('error');
@@ -358,6 +400,7 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
 }
 
 function render(): void {
+  renderColumns = columns.filter((column) => !hiddenColumns.has(column.name));
   colElements = [];
   grid.replaceChildren(buildColgroup(), buildHead(), buildBody(), buildFooter());
   autofitAll(INITIAL_MAX_WIDTH);
@@ -369,7 +412,7 @@ function buildFooter(): HTMLTableSectionElement {
   const row = document.createElement('tr');
   const cell = document.createElement('td');
   cell.className = 'add-row';
-  cell.colSpan = columns.length + 1;
+  cell.colSpan = renderColumns.length + 1;
   cell.textContent = '＋  Add row';
   if (hasPrimaryKey) {
     cell.addEventListener('click', addRow);
@@ -386,7 +429,7 @@ function buildColgroup(): HTMLTableColElement {
   const actionsCol = document.createElement('col');
   actionsCol.style.width = '28px';
   group.appendChild(actionsCol);
-  for (const _column of columns) {
+  for (const _column of renderColumns) {
     const col = document.createElement('col');
     colElements.push(col);
     group.appendChild(col);
@@ -398,7 +441,7 @@ function buildHead(): HTMLTableSectionElement {
   const head = document.createElement('thead');
   const row = document.createElement('tr');
   row.appendChild(document.createElement('th'));
-  columns.forEach((column, index) => {
+  renderColumns.forEach((column, index) => {
     const cell = document.createElement('th');
     const label = document.createElement('span');
     label.className = 'th-label';
@@ -468,7 +511,7 @@ function startResize(event: MouseEvent, index: number): void {
 
 function autofitAll(maxWidth: number): void {
   updateCellFont();
-  columns.forEach((_column, index) => autofit(index, maxWidth));
+  renderColumns.forEach((_column, index) => autofit(index, maxWidth));
 }
 
 function autofit(index: number, maxWidth: number): void {
@@ -491,7 +534,7 @@ function measureColumn(index: number, maxWidth: number): number {
     return 150;
   }
   measureCtx.font = cellFont;
-  const column = columns[index];
+  const column = renderColumns[index];
   const isDate = isDateColumn(column.type);
   let widest = measureCtx.measureText(column.name).width + (column.isPrimaryKey ? 16 : 0);
   for (const model of rowModels) {
@@ -526,7 +569,7 @@ function buildRow(model: RowModel, rowIndex: number): HTMLTableRowElement {
   const row = document.createElement('tr');
   applyRowState(row, model);
   row.appendChild(buildDeleteCell(model, row));
-  columns.forEach((column, colIndex) => {
+  renderColumns.forEach((column, colIndex) => {
     const cell = buildCell(model, column);
     cell.dataset.r = String(rowIndex);
     cell.dataset.c = String(colIndex);
