@@ -42,7 +42,50 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.dropTable', (node?: SchemaNode) => dropTable(node)),
     vscode.commands.registerCommand('dbStudio.createTable', (node?: SchemaNode) => createTable(node)),
     vscode.commands.registerCommand('dbStudio.modifyTable', (node?: SchemaNode) => modifyTable(node)),
+    vscode.commands.registerCommand('dbStudio.createDatabase', (node?: SchemaNode) => createDatabase(node)),
+    vscode.commands.registerCommand('dbStudio.dropDatabase', (node?: SchemaNode) => dropDatabase(node)),
   );
+}
+
+async function dropDatabase(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'namespace' || !node.namespace) {
+    return;
+  }
+  const confirmed = await vscode.window.showWarningMessage(
+    `Drop "${node.namespace}"? All its tables and data are removed — this cannot be undone.`,
+    { modal: true },
+    'Drop',
+  );
+  if (confirmed !== 'Drop') {
+    return;
+  }
+  try {
+    const driver = await manager.getDriver(node.connectionName);
+    await driver.query(driver.buildDropNamespace(node.namespace));
+    treeProvider.refresh();
+    vscode.window.showInformationMessage(`DB Studio: "${node.namespace}" dropped.`);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function createDatabase(node?: SchemaNode): Promise<void> {
+  const name = node ? node.connectionName : await pickConnectionName();
+  if (!name) {
+    return;
+  }
+  const dbName = await vscode.window.showInputBox({ prompt: 'New database / schema name', ignoreFocusOut: true });
+  if (!dbName) {
+    return;
+  }
+  try {
+    const driver = await manager.getDriver(name);
+    await driver.query(driver.buildCreateNamespace(dbName));
+    treeProvider.refresh();
+    vscode.window.showInformationMessage(`DB Studio: "${dbName}" created.`);
+  } catch (error) {
+    reportError(error);
+  }
 }
 
 async function createTable(node?: SchemaNode): Promise<void> {

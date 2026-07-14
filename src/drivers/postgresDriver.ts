@@ -135,6 +135,14 @@ export class PostgresDriver implements DatabaseDriver {
     return `${this.quoteIdentifier(namespace)}.${this.quoteIdentifier(table)}`;
   }
 
+  buildCreateNamespace(name: string): string {
+    return `CREATE SCHEMA ${this.quoteIdentifier(name)};`;
+  }
+
+  buildDropNamespace(name: string): string {
+    return `DROP SCHEMA ${this.quoteIdentifier(name)} CASCADE;`;
+  }
+
   buildCreateTable(namespace: string, table: string, columns: ColumnDraft[]): string {
     const active = columns.filter((column) => !column.drop && column.name.trim() !== '');
     const lines = active.map((column) => `  ${this.columnDef(column)}`);

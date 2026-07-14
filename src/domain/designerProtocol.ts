@@ -1,9 +1,10 @@
-import type { ColumnDraft } from './types';
+import type { ColumnDraft, DriverKind } from './types';
 
 /** Messages from the extension host to the table designer webview. */
 export interface DesignerInitMessage {
   type: 'init';
   mode: 'create' | 'modify';
+  driver: DriverKind;
   table: string;
   columns: ColumnDraft[];
 }

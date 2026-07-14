@@ -60,6 +60,11 @@ body {
   border-color: var(--vscode-button-background);
 }
 
+.bar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .notice {
   padding: 6px 20px;
   font-size: 12px;
@@ -74,7 +79,7 @@ body {
   display: none;
 }
 
-#columnsWrap {
+#content {
   flex: 1 1 auto;
   overflow: auto;
   padding: 16px 20px;
@@ -100,9 +105,10 @@ th {
 }
 
 td input[type='text'],
-td input:not([type]) {
+td input:not([type]),
+td select {
   width: 100%;
-  min-width: 120px;
+  min-width: 110px;
   box-sizing: border-box;
   border: none;
   outline: none;
@@ -113,10 +119,19 @@ td input:not([type]) {
   font-size: 13px;
 }
 
-td input:focus {
+td select {
+  cursor: pointer;
+}
+
+td input:focus,
+td select:focus {
   background: var(--vscode-input-background);
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
+}
+
+td input:disabled {
+  opacity: 0.4;
 }
 
 td.check {
@@ -145,20 +160,30 @@ tr.dropped td {
   color: var(--vscode-descriptionForeground);
 }
 
+#sqlPane {
+  margin-top: 18px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.sql-title {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
 .sql {
-  flex: 0 0 auto;
-  max-height: 40%;
-  overflow: auto;
   margin: 0;
-  padding: 12px 20px;
-  border-top: 1px solid var(--vscode-panel-border);
+  padding: 12px;
   background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
   color: var(--vscode-foreground);
   font-family: var(--vscode-editor-font-family);
   font-size: 12px;
   white-space: pre-wrap;
-}
-
-.sql:empty {
-  display: none;
 }

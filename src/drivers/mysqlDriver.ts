@@ -88,6 +88,14 @@ export class MysqlDriver implements DatabaseDriver {
     return `${this.quoteIdentifier(namespace)}.${this.quoteIdentifier(table)}`;
   }
 
+  buildCreateNamespace(name: string): string {
+    return `CREATE DATABASE ${this.quoteIdentifier(name)};`;
+  }
+
+  buildDropNamespace(name: string): string {
+    return `DROP DATABASE ${this.quoteIdentifier(name)};`;
+  }
+
   buildCreateTable(namespace: string, table: string, columns: ColumnDraft[]): string {
     const active = columns.filter((column) => !column.drop && column.name.trim() !== '');
     const lines = active.map((column) => `  ${this.columnDef(column)}`);

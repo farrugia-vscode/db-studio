@@ -72,7 +72,14 @@ export class TableDesignerView {
           drop: false,
         }));
       }
-      this.post({ type: 'init', mode: this.target.table ? 'modify' : 'create', table: this.target.table ?? '', columns });
+      const driver = this.manager.getConnection(this.target.connectionName)?.driver ?? 'mysql';
+      this.post({
+        type: 'init',
+        mode: this.target.table ? 'modify' : 'create',
+        driver,
+        table: this.target.table ?? '',
+        columns,
+      });
     } catch (error) {
       this.reportError(error);
     }
@@ -161,22 +168,24 @@ export class TableDesignerView {
   <div class="bar">
     <label id="tableNameWrap">Table name <input id="tableName" spellcheck="false"></label>
     <span class="spacer"></span>
-    <button id="preview">Preview SQL</button>
-    <button id="apply" class="primary">Apply</button>
+    <button id="apply" class="primary" disabled>Apply</button>
   </div>
   <div id="notice" class="notice"></div>
-  <div id="columnsWrap">
+  <div id="content">
     <table id="columns">
       <thead>
         <tr>
-          <th></th><th>Name</th><th>Type</th><th>Null</th><th>PK</th><th>Auto</th><th>Default</th>
+          <th></th><th>Name</th><th>Type</th><th>Size</th><th>Null</th><th>PK</th><th>Auto</th><th>Default</th>
         </tr>
       </thead>
       <tbody id="columnsBody"></tbody>
     </table>
     <button id="addColumn">+ Add column</button>
+    <div id="sqlPane">
+      <div class="sql-title">Generated SQL</div>
+      <pre id="sql" class="sql"></pre>
+    </div>
   </div>
-  <pre id="sql" class="sql"></pre>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

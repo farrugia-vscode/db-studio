@@ -33,8 +33,12 @@ export interface SqlDialect {
   placeholder(index: number): string;
 }
 
-/** Generates DDL for creating and altering tables (dialect-specific). */
+/** Generates DDL for creating databases/schemas and creating/altering tables (dialect-specific). */
 export interface SchemaMutator {
+  /** CREATE DATABASE (MySQL) or CREATE SCHEMA (PostgreSQL). */
+  buildCreateNamespace(name: string): string;
+  /** DROP DATABASE (MySQL) or DROP SCHEMA … CASCADE (PostgreSQL). */
+  buildDropNamespace(name: string): string;
   buildCreateTable(namespace: string, table: string, columns: ColumnDraft[]): string;
   buildAlterTable(namespace: string, table: string, original: ColumnMeta[], edited: ColumnDraft[]): string[];
 }
