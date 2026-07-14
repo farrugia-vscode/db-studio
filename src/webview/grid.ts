@@ -57,6 +57,12 @@ let selAnchor: { r: number; c: number } | null = null;
 let selFocus: { r: number; c: number } | null = null;
 let selecting = false;
 
+// Grid-level undo/redo of structural edits (cell change, add/delete row, fill, paste).
+// In-cell text editing keeps the field's own native undo while the input is focused.
+const UNDO_LIMIT = 100;
+let undoStack: RowModel[][] = [];
+let redoStack: RowModel[][] = [];
+
 commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 // The 'search' event fires on Enter and when the native clear (×) is clicked.
@@ -97,23 +103,80 @@ function onGridMouseMove(event: MouseEvent): void {
 }
 
 function onGridKeydown(event: KeyboardEvent): void {
-  if (!(event.ctrlKey || event.metaKey) || !selRect()) {
+  if (!(event.ctrlKey || event.metaKey)) {
     return;
   }
   const active = document.activeElement;
   if (active instanceof HTMLInputElement && !active.readOnly) {
-    return; // editing a cell — let the input handle the shortcut
+    return; // editing a cell — let the input handle its own shortcuts (native undo included)
   }
-  if (event.key === 'c') {
+  const key = event.key.toLowerCase();
+  if (key === 'z' && !event.shiftKey) {
+    event.preventDefault();
+    undo();
+    return;
+  }
+  if (key === 'y' || (key === 'z' && event.shiftKey)) {
+    event.preventDefault();
+    redo();
+    return;
+  }
+  if (!selRect()) {
+    return;
+  }
+  if (key === 'c') {
     event.preventDefault();
     copySelection();
-  } else if (event.key === 'd') {
+  } else if (key === 'd') {
     event.preventDefault();
     fillDown();
-  } else if (event.key === 'v') {
+  } else if (key === 'v') {
     event.preventDefault();
     void pasteSelection();
   }
+}
+
+function cloneModels(): RowModel[] {
+  return rowModels.map((model) => ({
+    values: { ...model.values },
+    original: model.original ? { ...model.original } : null,
+    deleted: model.deleted,
+  }));
+}
+
+// Snapshot the current grid state before a structural edit, so Ctrl+Z can restore it.
+function pushUndo(): void {
+  undoStack.push(cloneModels());
+  if (undoStack.length > UNDO_LIMIT) {
+    undoStack.shift();
+  }
+  redoStack = [];
+}
+
+function undo(): void {
+  const previous = undoStack.pop();
+  if (!previous) {
+    return;
+  }
+  redoStack.push(cloneModels());
+  restoreModels(previous);
+}
+
+function redo(): void {
+  const next = redoStack.pop();
+  if (!next) {
+    return;
+  }
+  undoStack.push(cloneModels());
+  restoreModels(next);
+}
+
+function restoreModels(models: RowModel[]): void {
+  rowModels = models;
+  selAnchor = null;
+  selFocus = null;
+  render();
+  refreshPending();
 }
 
 function selRect(): { r1: number; r2: number; c1: number; c2: number } | null {
@@ -161,6 +224,7 @@ function fillDown(): void {
   if (!rect || !hasPrimaryKey) {
     return;
   }
+  pushUndo();
   const anchor = selAnchor;
   const focus = selFocus;
   for (let c = rect.c1; c <= rect.c2; c += 1) {
@@ -187,6 +251,7 @@ async function pasteSelection(): Promise<void> {
   }
   const text = await navigator.clipboard.readText();
   const lines = text.replace(/\r/g, '').replace(/\n$/, '').split('\n');
+  pushUndo();
   const anchor = selAnchor;
   const focus = selFocus;
   lines.forEach((line, rowOffset) => {
@@ -284,6 +349,8 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
   pkColumns = nextPkColumns;
   hasPrimaryKey = nextPkColumns.length > 0;
   rowModels = rows.map((row) => ({ values: toCellRow(row), original: toCellRow(row), deleted: false }));
+  undoStack = [];
+  redoStack = [];
   notice.classList.remove('error');
   notice.textContent = hasPrimaryKey ? '' : 'Read-only: this table has no primary key, rows cannot be edited safely.';
   render();
@@ -478,6 +545,7 @@ function buildDeleteCell(model: RowModel, row: HTMLTableRowElement): HTMLTableCe
   button.textContent = '×';
   button.title = 'Delete row';
   button.addEventListener('click', () => {
+    pushUndo();
     if (model.original === null) {
       // Uncommitted new row → just drop it, no "marked for deletion" state.
       rowModels = rowModels.filter((candidate) => candidate !== model);
@@ -545,6 +613,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   } else if (editable) {
     input.addEventListener('dblclick', () => {
       if (dateType) {
+        pushUndo();
         input.type = dateType;
         if (dateType === 'datetime-local') {
           input.step = '1';
@@ -576,6 +645,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
 }
 
 function beginInlineEdit(input: HTMLInputElement): void {
+  pushUndo();
   input.readOnly = false;
   input.focus();
   // Cursor at the end of the text rather than selecting everything.
@@ -651,6 +721,7 @@ function buildEnumCell(model: RowModel, column: ColumnMeta, options: string[]): 
   }
   select.value = model.values[column.name] ?? '';
   select.addEventListener('change', () => {
+    pushUndo();
     model.values[column.name] = select.value === '' && column.isNullable ? null : select.value;
     applyCellState(cell, model, column);
     refreshPending();
@@ -751,6 +822,7 @@ function saveJsonModal(): void {
   if (!jsonTarget || !validateJsonModal()) {
     return;
   }
+  pushUndo();
   const text = jsonModalText.value.trim();
   const { model, column, input, cell } = jsonTarget;
   const next = text === '' ? (column.isNullable ? null : '') : JSON.stringify(JSON.parse(text));
@@ -785,6 +857,7 @@ function applyCellState(cell: HTMLTableCellElement, model: RowModel, column: Col
 }
 
 function addRow(): void {
+  pushUndo();
   const values: Record<string, CellValue> = {};
   for (const column of columns) {
     values[column.name] = null;
