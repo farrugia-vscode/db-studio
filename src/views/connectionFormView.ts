@@ -123,7 +123,10 @@ export class ConnectionFormView {
 </head>
 <body>
   <form id="form" autocomplete="off">
-    <label>Name<input id="name" required></label>
+    <div class="row">
+      <label class="grow">Name<input id="name" required></label>
+      <label class="icon-field">Icon<input id="icon" maxlength="4" placeholder="🚀"></label>
+    </div>
     <label>Driver
       <div class="driver-picker" id="driverPicker">
         <button type="button" class="driver-option" data-driver="mysql"><span class="ico">🐬</span> MySQL / MariaDB</button>

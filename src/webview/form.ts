@@ -13,6 +13,7 @@ const DEFAULT_PORTS: Record<DriverKind, string> = { mysql: '3306', postgres: '54
 
 const form = byId<HTMLFormElement>('form');
 const nameInput = byId<HTMLInputElement>('name');
+const iconInput = byId<HTMLInputElement>('icon');
 const driverPicker = byId<HTMLDivElement>('driverPicker');
 const hostInput = byId<HTMLInputElement>('host');
 const portInput = byId<HTMLInputElement>('port');
@@ -60,6 +61,7 @@ api.postMessage({ type: 'ready' });
 
 function applyInit(isEdit: boolean, connection: Partial<ConnectionConfig>): void {
   nameInput.value = connection.name ?? '';
+  iconInput.value = connection.icon ?? '';
   setDriver(connection.driver ?? 'mysql');
   hostInput.value = connection.host ?? '127.0.0.1';
   portInput.value = connection.port !== undefined ? String(connection.port) : DEFAULT_PORTS[selectedDriver];
@@ -84,6 +86,7 @@ function readConnection(): ConnectionConfig {
     user: userInput.value.trim(),
     database: databaseInput.value.trim() || undefined,
     color: useColor ? colorInput.value : undefined,
+    icon: iconInput.value.trim() || undefined,
   };
 }
 

@@ -6,6 +6,7 @@
   var DEFAULT_PORTS = { mysql: "3306", postgres: "5432" };
   var form = byId("form");
   var nameInput = byId("name");
+  var iconInput = byId("icon");
   var driverPicker = byId("driverPicker");
   var hostInput = byId("host");
   var portInput = byId("port");
@@ -46,6 +47,7 @@
   api.postMessage({ type: "ready" });
   function applyInit(isEdit, connection) {
     nameInput.value = connection.name ?? "";
+    iconInput.value = connection.icon ?? "";
     setDriver(connection.driver ?? "mysql");
     hostInput.value = connection.host ?? "127.0.0.1";
     portInput.value = connection.port !== void 0 ? String(connection.port) : DEFAULT_PORTS[selectedDriver];
@@ -68,7 +70,8 @@
       port: portInput.value ? Number(portInput.value) : void 0,
       user: userInput.value.trim(),
       database: databaseInput.value.trim() || void 0,
-      color: useColor ? colorInput.value : void 0
+      color: useColor ? colorInput.value : void 0,
+      icon: iconInput.value.trim() || void 0
     };
   }
   function submit() {

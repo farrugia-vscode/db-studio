@@ -9,6 +9,8 @@ export interface ConnectionConfig {
   database?: string;
   /** Optional hex color (e.g. `#4ec94e`) used to tint the connection in the tree. */
   color?: string;
+  /** Optional emoji shown before the connection name in the tree (e.g. `🚀`). */
+  icon?: string;
 }
 
 export interface ColumnMeta {

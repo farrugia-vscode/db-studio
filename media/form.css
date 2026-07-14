@@ -80,6 +80,15 @@ input:read-only {
   width: 90px;
 }
 
+.icon-field {
+  width: 90px;
+}
+
+.icon-field input {
+  text-align: center;
+  font-size: 16px;
+}
+
 .color-row {
   display: flex;
   align-items: center;

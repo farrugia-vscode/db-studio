@@ -43,7 +43,8 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     const connections = this.manager.getConnections();
     return Promise.all(
       connections.map(async (connection) => {
-        const node = new SchemaNode('connection', connection.name, Collapsed, connection.name);
+        const label = connection.icon ? `${connection.icon} ${connection.name}` : connection.name;
+        const node = new SchemaNode('connection', label, Collapsed, connection.name);
         node.description = `${connection.driver} · ${connection.host}`;
         node.iconPath = await this.icons.connectionIcon(connection.color);
         return node;

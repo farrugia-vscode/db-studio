@@ -2,7 +2,7 @@
   "name": "db-studio",
   "displayName": "DB Studio",
   "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL)",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "publisher": "farrugia",
   "icon": "icon.png",
   "engines": {
@@ -229,6 +229,10 @@
               "color": {
                 "type": "string",
                 "description": "Optional hex color (e.g. #4ec94e) tinting the connection in the tree."
+              },
+              "icon": {
+                "type": "string",
+                "description": "Optional emoji shown before the connection name (e.g. 🚀)."
               }
             }
           }
