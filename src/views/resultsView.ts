@@ -49,7 +49,6 @@ export class ResultsView {
   :root { --conn: transparent; --cell-px: 12px; --cell-py: 7px; }
   html, body { height: 100%; }
   body { margin: 0; display: flex; flex-direction: column; font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); }
-  body.tinted::before { content: ''; flex: 0 0 auto; height: 3px; background: var(--conn); }
   .summary { color: var(--vscode-descriptionForeground); font-size: 12px; padding: 10px 16px; }
   #results { overflow: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
