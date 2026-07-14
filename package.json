@@ -77,6 +77,11 @@
         "category": "DB Studio"
       },
       {
+        "command": "dbStudio.showObjectDdl",
+        "title": "Show DDL",
+        "category": "DB Studio"
+      },
+      {
         "command": "dbStudio.emptyTable",
         "title": "Empty Table…",
         "category": "DB Studio"
@@ -191,6 +196,11 @@
           "command": "dbStudio.dropTable",
           "when": "view == dbStudio.explorer && viewItem == table",
           "group": "9_danger@2"
+        },
+        {
+          "command": "dbStudio.showObjectDdl",
+          "when": "view == dbStudio.explorer && viewItem == object",
+          "group": "inline"
         },
         {
           "command": "dbStudio.openSqlConsole",

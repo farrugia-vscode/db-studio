@@ -8,7 +8,9 @@ import type {
   ForeignKeyMeta,
   IndexMeta,
   QueryResult,
+  RoutineMeta,
   Row,
+  SchemaObjectKind,
   TableDesign,
   TableSchema,
 } from '../domain/types';
@@ -137,6 +139,89 @@ export class PostgresDriver implements DatabaseDriver {
       lines.push(`  PRIMARY KEY (${pkColumns.map((column) => this.quoteIdentifier(column)).join(', ')})`);
     }
     return `CREATE TABLE ${this.buildTableRef(namespace, table)} (\n${lines.join(',\n')}\n);`;
+  }
+
+  async listViews(namespace: string): Promise<string[]> {
+    await this.connect();
+    const result = await this.client!.query<{ name: string }>(
+      `SELECT table_name AS name FROM information_schema.views
+       WHERE table_schema = $1 ORDER BY table_name`,
+      [namespace],
+    );
+    return result.rows.map((row) => row.name);
+  }
+
+  async listRoutines(namespace: string): Promise<RoutineMeta[]> {
+    await this.connect();
+    const result = await this.client!.query<{ name: string; type: string }>(
+      `SELECT routine_name AS name, routine_type AS type FROM information_schema.routines
+       WHERE routine_schema = $1 AND routine_type IS NOT NULL ORDER BY routine_name`,
+      [namespace],
+    );
+    return result.rows.map((row) => ({
+      name: row.name,
+      kind: row.type.toUpperCase() === 'PROCEDURE' ? 'procedure' : 'function',
+    }));
+  }
+
+  async listTriggers(namespace: string): Promise<string[]> {
+    await this.connect();
+    const result = await this.client!.query<{ name: string }>(
+      `SELECT DISTINCT trigger_name AS name FROM information_schema.triggers
+       WHERE trigger_schema = $1 ORDER BY trigger_name`,
+      [namespace],
+    );
+    return result.rows.map((row) => row.name);
+  }
+
+  async listSequences(namespace: string): Promise<string[]> {
+    await this.connect();
+    const result = await this.client!.query<{ name: string }>(
+      `SELECT sequence_name AS name FROM information_schema.sequences
+       WHERE sequence_schema = $1 ORDER BY sequence_name`,
+      [namespace],
+    );
+    return result.rows.map((row) => row.name);
+  }
+
+  async getObjectDdl(namespace: string, kind: SchemaObjectKind, name: string): Promise<string> {
+    await this.connect();
+    if (kind === 'view') {
+      const result = await this.client!.query<{ ddl: string }>(
+        'SELECT pg_get_viewdef($1::regclass, true) AS ddl',
+        [`${namespace}.${name}`],
+      );
+      return `CREATE OR REPLACE VIEW ${this.buildTableRef(namespace, name)} AS\n${result.rows[0]?.ddl ?? ''}`;
+    }
+    if (kind === 'trigger') {
+      const result = await this.client!.query<{ ddl: string }>(
+        `SELECT pg_get_triggerdef(t.oid) AS ddl FROM pg_trigger t
+         JOIN pg_class c ON c.oid = t.tgrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = $1 AND t.tgname = $2 LIMIT 1`,
+        [namespace, name],
+      );
+      return result.rows[0]?.ddl ?? '';
+    }
+    if (kind === 'sequence') {
+      const result = await this.client!.query<{ data_type: string; start: string; inc: string; min: string; max: string }>(
+        `SELECT data_type, start_value AS start, increment AS inc, minimum_value AS min, maximum_value AS max
+         FROM information_schema.sequences WHERE sequence_schema = $1 AND sequence_name = $2`,
+        [namespace, name],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        return '';
+      }
+      return `CREATE SEQUENCE ${this.buildTableRef(namespace, name)}\n  AS ${row.data_type}\n  START WITH ${row.start}\n  INCREMENT BY ${row.inc}\n  MINVALUE ${row.min}\n  MAXVALUE ${row.max};`;
+    }
+    const result = await this.client!.query<{ ddl: string }>(
+      `SELECT pg_get_functiondef(p.oid) AS ddl FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = $1 AND p.proname = $2 LIMIT 1`,
+      [namespace, name],
+    );
+    return result.rows[0]?.ddl ?? '';
   }
 
   quoteIdentifier(identifier: string): string {

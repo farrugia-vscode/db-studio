@@ -10,7 +10,9 @@ import type {
   ForeignKeyMeta,
   IndexMeta,
   QueryResult,
+  RoutineMeta,
   Row,
+  SchemaObjectKind,
   TableDesign,
   TableSchema,
 } from '../domain/types';
@@ -90,6 +92,53 @@ export class MysqlDriver implements DatabaseDriver {
     const rows = await this.select(`SHOW CREATE TABLE ${this.buildTableRef(namespace, table)}`);
     const row = rows[0];
     return row ? String(row['Create Table'] ?? row['Create View'] ?? '') : '';
+  }
+
+  async listViews(namespace: string): Promise<string[]> {
+    const rows = await this.select(
+      'SELECT table_name AS name FROM information_schema.views WHERE table_schema = ? ORDER BY table_name',
+      [namespace],
+    );
+    return rows.map((row) => String(row.name));
+  }
+
+  async listRoutines(namespace: string): Promise<RoutineMeta[]> {
+    const rows = await this.select(
+      `SELECT routine_name AS name, routine_type AS type
+       FROM information_schema.routines WHERE routine_schema = ? ORDER BY routine_name`,
+      [namespace],
+    );
+    return rows.map((row) => ({
+      name: String(row.name),
+      kind: String(row.type).toUpperCase() === 'PROCEDURE' ? 'procedure' : 'function',
+    }));
+  }
+
+  async listTriggers(namespace: string): Promise<string[]> {
+    const rows = await this.select(
+      'SELECT trigger_name AS name FROM information_schema.triggers WHERE trigger_schema = ? ORDER BY trigger_name',
+      [namespace],
+    );
+    return rows.map((row) => String(row.name));
+  }
+
+  async listSequences(): Promise<string[]> {
+    return []; // MySQL has no sequences.
+  }
+
+  async getObjectDdl(namespace: string, kind: SchemaObjectKind, name: string): Promise<string> {
+    const ref = this.buildTableRef(namespace, name);
+    if (kind === 'view') {
+      const rows = await this.select(`SHOW CREATE VIEW ${ref}`);
+      return rows[0] ? String(rows[0]['Create View'] ?? '') : '';
+    }
+    if (kind === 'trigger') {
+      const rows = await this.select(`SHOW CREATE TRIGGER ${ref}`);
+      return rows[0] ? String(rows[0]['SQL Original Statement'] ?? '') : '';
+    }
+    const keyword = kind === 'procedure' ? 'PROCEDURE' : 'FUNCTION';
+    const rows = await this.select(`SHOW CREATE ${keyword} ${ref}`);
+    return rows[0] ? String(rows[0][`Create ${keyword === 'PROCEDURE' ? 'Procedure' : 'Function'}`] ?? '') : '';
   }
 
   quoteIdentifier(identifier: string): string {

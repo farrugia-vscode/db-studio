@@ -87,6 +87,14 @@ export interface TableSchema {
   foreignKeys: ForeignKeyMeta[];
 }
 
+/** Non-table schema objects surfaced in the tree, each shown as read-only DDL. */
+export type SchemaObjectKind = 'view' | 'procedure' | 'function' | 'trigger' | 'sequence';
+
+export interface RoutineMeta {
+  name: string;
+  kind: 'procedure' | 'function';
+}
+
 export type Row = Record<string, unknown>;
 
 export interface QueryResult {

@@ -3,6 +3,8 @@ import type {
   ForeignKeyMeta,
   IndexMeta,
   QueryResult,
+  RoutineMeta,
+  SchemaObjectKind,
   TableDesign,
   TableSchema,
 } from './types';
@@ -27,6 +29,13 @@ export interface SchemaIntrospector {
   listForeignKeys(namespace: string, table: string): Promise<ForeignKeyMeta[]>;
   /** The CREATE TABLE statement for a table. */
   getTableDdl(namespace: string, table: string): Promise<string>;
+  /** Non-table objects, empty when the engine has none of that kind. */
+  listViews(namespace: string): Promise<string[]>;
+  listRoutines(namespace: string): Promise<RoutineMeta[]>;
+  listTriggers(namespace: string): Promise<string[]>;
+  listSequences(namespace: string): Promise<string[]>;
+  /** The source / definition of a non-table object, shown read-only. */
+  getObjectDdl(namespace: string, kind: SchemaObjectKind, name: string): Promise<string>;
 }
 
 export interface StatementExecutor {

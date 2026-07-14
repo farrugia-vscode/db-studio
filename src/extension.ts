@@ -8,7 +8,7 @@ import { ResultsView } from './views/resultsView';
 import { DataGridView } from './views/dataGridView';
 import { TableDesignerView } from './views/tableDesignerView';
 import { SqlConsoleView } from './views/sqlConsoleView';
-import { DDL_SCHEME, DdlContentProvider, buildDdlUri } from './views/ddlContentProvider';
+import { DDL_SCHEME, DdlContentProvider, buildDdlUri, buildObjectDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
 
 let manager: ConnectionManager;
@@ -41,6 +41,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.runQuery', (node?: SchemaNode) => runQuery(node)),
     vscode.commands.registerCommand('dbStudio.openTableData', (node?: SchemaNode) => openTableData(node)),
     vscode.commands.registerCommand('dbStudio.showTableDdl', (node?: SchemaNode) => showTableDdl(node)),
+    vscode.commands.registerCommand('dbStudio.showObjectDdl', (node?: SchemaNode) => showObjectDdl(node)),
     vscode.commands.registerCommand('dbStudio.emptyTable', (node?: SchemaNode) => emptyTable(node)),
     vscode.commands.registerCommand('dbStudio.dropTable', (node?: SchemaNode) => dropTable(node)),
     vscode.commands.registerCommand('dbStudio.createTable', (node?: SchemaNode) => createTable(node)),
@@ -163,7 +164,10 @@ async function runQuery(node?: SchemaNode): Promise<void> {
 }
 
 async function openTableData(node?: SchemaNode): Promise<void> {
-  if (!node || node.kind !== 'table' || !node.namespace || !node.table) {
+  // Tables and views both open in the data grid (a view lands read-only: no primary key).
+  const isTable = node?.kind === 'table';
+  const isView = node?.kind === 'object' && node.objectKind === 'view';
+  if (!node || (!isTable && !isView) || !node.namespace || !node.table) {
     return;
   }
   await dataGridView.open({
@@ -171,6 +175,21 @@ async function openTableData(node?: SchemaNode): Promise<void> {
     namespace: node.namespace,
     table: node.table,
   });
+}
+
+async function showObjectDdl(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'object' || !node.namespace || !node.table || !node.objectKind) {
+    return;
+  }
+  try {
+    const document = await vscode.workspace.openTextDocument(
+      buildObjectDdlUri(node.connectionName, node.namespace, node.table, node.objectKind),
+    );
+    await vscode.languages.setTextDocumentLanguage(document, 'sql');
+    await vscode.window.showTextDocument(document, { preview: true });
+  } catch (error) {
+    reportError(error);
+  }
 }
 
 async function showTableDdl(node?: SchemaNode): Promise<void> {
