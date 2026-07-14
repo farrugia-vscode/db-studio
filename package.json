@@ -121,6 +121,17 @@
         "title": "SQL Console",
         "icon": "$(terminal)",
         "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.duplicateConnection",
+        "title": "Duplicate Connection",
+        "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.findTable",
+        "title": "Find Table…",
+        "icon": "$(search)",
+        "category": "DB Studio"
       }
     ],
     "menus": {
@@ -158,9 +169,19 @@
           "group": "1_manage@1"
         },
         {
-          "command": "dbStudio.removeConnection",
+          "command": "dbStudio.duplicateConnection",
           "when": "view == dbStudio.explorer && viewItem == connection",
           "group": "1_manage@2"
+        },
+        {
+          "command": "dbStudio.removeConnection",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "1_manage@3"
+        },
+        {
+          "command": "dbStudio.findTable",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "0_new@3"
         },
         {
           "command": "dbStudio.openTableData",

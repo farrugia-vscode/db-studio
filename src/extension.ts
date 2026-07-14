@@ -54,6 +54,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.dropDatabase', (node?: SchemaNode) => dropDatabase(node)),
     vscode.commands.registerCommand('dbStudio.openSqlConsole', (node?: SchemaNode) => openSqlConsole(node)),
     vscode.commands.registerCommand('dbStudio.exportTable', (node?: SchemaNode) => exportTable(node)),
+    vscode.commands.registerCommand('dbStudio.duplicateConnection', (node?: SchemaNode) => duplicateConnection(node)),
+    vscode.commands.registerCommand('dbStudio.findTable', (node?: SchemaNode) => findTable(node)),
   );
 }
 
@@ -122,6 +124,50 @@ async function modifyTable(node?: SchemaNode): Promise<void> {
 export async function deactivate(): Promise<void> {
   if (manager) {
     await manager.closeAll();
+  }
+}
+
+async function duplicateConnection(node?: SchemaNode): Promise<void> {
+  const name = node ? node.connectionName : await pickConnectionName();
+  if (!name) {
+    return;
+  }
+  const created = await manager.duplicateConnection(name);
+  if (created) {
+    treeProvider.refresh();
+    vscode.window.showInformationMessage(`DB Studio: duplicated "${name}" as "${created}".`);
+  }
+}
+
+/** "Go to table": fuzzy-pick any table or view across the connection's schemas, then open it. */
+async function findTable(node?: SchemaNode): Promise<void> {
+  const name = node ? node.connectionName : await pickConnectionName();
+  if (!name) {
+    return;
+  }
+  try {
+    const driver = await manager.getDriver(name);
+    const namespaces = await driver.listNamespaces();
+    const items: Array<vscode.QuickPickItem & { namespace: string; table: string }> = [];
+    for (const namespace of namespaces) {
+      const [tables, views] = await Promise.all([driver.listTables(namespace), driver.listViews(namespace)]);
+      for (const table of tables) {
+        items.push({ label: `$(table) ${table}`, description: namespace, namespace, table });
+      }
+      for (const view of views) {
+        items.push({ label: `$(eye) ${view}`, description: namespace, namespace, table: view });
+      }
+    }
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: `Find a table or view in "${name}"`,
+      matchOnDescription: true,
+    });
+    if (!picked) {
+      return;
+    }
+    await dataGridView.open({ connectionName: name, namespace: picked.namespace, table: picked.table });
+  } catch (error) {
+    reportError(error);
   }
 }
 

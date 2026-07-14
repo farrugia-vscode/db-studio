@@ -50,6 +50,30 @@ export class ConnectionManager {
     }
   }
 
+  /** Copies a connection (config + stored password) under a fresh unique name; returns it. */
+  async duplicateConnection(name: string): Promise<string | undefined> {
+    const source = this.getConnection(name);
+    if (!source) {
+      return undefined;
+    }
+    const newName = this.uniqueName(`${name} copy`);
+    const password = (await this.context.secrets.get(SECRET_PREFIX + name)) ?? '';
+    await this.saveConnection({ ...source, name: newName }, password);
+    return newName;
+  }
+
+  private uniqueName(base: string): string {
+    const existing = new Set(this.getConnections().map((connection) => connection.name));
+    if (!existing.has(base)) {
+      return base;
+    }
+    let suffix = 2;
+    while (existing.has(`${base} ${suffix}`)) {
+      suffix += 1;
+    }
+    return `${base} ${suffix}`;
+  }
+
   async removeConnection(name: string): Promise<void> {
     const connections = this.getConnections().filter((connection) => connection.name !== name);
     await this.writeConnections(connections);
