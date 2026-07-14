@@ -33,9 +33,12 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Horizontal scroll (table width synced to columns on resize)
 - [x] Filter = raw SQL `WHERE` condition, run on Enter (server-side)
 - [x] Pagination (page size 10/20/50/100/500/No + first / prev / next / last)
+- [x] Edit a cell on double-click (single click selects / highlights)
+- [x] JSON cell editor in a modal (validate + pretty-print)
+- [x] Enum columns edited via a dropdown
+- [ ] Date / datetime picker (MySQL now returns raw date strings)
+- [ ] Multi-cell selection & fill (Excel-style) — to spec later
 - [ ] Hide / show columns
-- [ ] Edit a cell on double-click only (not single click)
-- [ ] Better JSON cell editor (expanded / modal)
 - [ ] Sort by column (click header)
 - [ ] Copy cell / row, export selection
 

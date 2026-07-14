@@ -63,6 +63,17 @@ pageSizeInput.addEventListener('change', () => {
   api.postMessage({ type: 'page', offset: 0, pageSize: pageSizeInput.value === 'No' ? 0 : parseInt(pageSizeInput.value, 10) });
 });
 
+const jsonModal = element<HTMLDivElement>('jsonModal');
+const jsonModalText = element<HTMLTextAreaElement>('jsonModalText');
+const jsonModalError = element<HTMLDivElement>('jsonModalError');
+const jsonModalSave = element<HTMLButtonElement>('jsonModalSave');
+const jsonModalCancel = element<HTMLButtonElement>('jsonModalCancel');
+
+let jsonTarget: { model: RowModel; column: ColumnMeta; input: HTMLInputElement; cell: HTMLTableCellElement } | null = null;
+
+jsonModalSave.addEventListener('click', saveJsonModal);
+jsonModalCancel.addEventListener('click', closeJsonModal);
+
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
   if (message.type === 'data') {
@@ -297,16 +308,23 @@ function buildDeleteCell(model: RowModel, row: HTMLTableRowElement): HTMLTableCe
 }
 
 function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
-  const cell = document.createElement('td');
-  const input = document.createElement('input');
   const isInserted = model.original === null;
   // The DB fills auto-increment / identity columns itself, so a new row shows <generated>.
   const isGenerated = column.isAutoIncrement && isInserted;
   // Primary keys stay editable: UPDATE matches on the ORIGINAL pk, so changing it is safe here.
-  const isReadOnly = !hasPrimaryKey || isGenerated;
+  const editable = hasPrimaryKey && !isGenerated;
+  const options = editable ? enumValues(column.type) : null;
+  if (options) {
+    return buildEnumCell(model, column, options);
+  }
+
+  const cell = document.createElement('td');
+  const input = document.createElement('input');
+  const isJson = editable && column.type.toLowerCase().includes('json');
   const value = model.values[column.name];
   input.value = value ?? '';
-  input.readOnly = isReadOnly;
+  // Excel-like: cells are in display mode; a double-click starts editing.
+  input.readOnly = true;
   if (isGenerated) {
     input.placeholder = '<generated>';
     input.classList.add('generated');
@@ -322,9 +340,122 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     applyCellState(cell, model, column);
     refreshPending();
   });
+  input.addEventListener('focus', () => cell.classList.add('focused'));
+  input.addEventListener('blur', () => {
+    cell.classList.remove('focused');
+    input.readOnly = true;
+  });
+
+  if (isJson) {
+    input.classList.add('json');
+    input.addEventListener('dblclick', () => openJsonModal(model, column, input, cell));
+  } else if (editable) {
+    input.addEventListener('dblclick', () => beginInlineEdit(input));
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        input.blur();
+      } else if (event.key === 'Escape') {
+        input.value = value ?? '';
+        model.values[column.name] = value;
+        applyCellState(cell, model, column);
+        refreshPending();
+        input.blur();
+      }
+    });
+  }
   applyCellState(cell, model, column);
   cell.appendChild(input);
   return cell;
+}
+
+function beginInlineEdit(input: HTMLInputElement): void {
+  input.readOnly = false;
+  input.focus();
+  input.select();
+}
+
+// Parses `enum('a','b','c')` (MySQL) into its allowed values, or null if not an enum.
+function enumValues(type: string): string[] | null {
+  const match = /^enum\((.*)\)$/i.exec(type.trim());
+  if (!match) {
+    return null;
+  }
+  return match[1].split(',').map((part) => part.trim().replace(/^'(.*)'$/, '$1').replace(/''/g, "'"));
+}
+
+function buildEnumCell(model: RowModel, column: ColumnMeta, options: string[]): HTMLTableCellElement {
+  const cell = document.createElement('td');
+  const select = document.createElement('select');
+  select.className = 'cell-select';
+  if (column.isNullable) {
+    select.appendChild(new Option('NULL', ''));
+  }
+  for (const option of options) {
+    select.appendChild(new Option(option, option));
+  }
+  select.value = model.values[column.name] ?? '';
+  select.addEventListener('change', () => {
+    model.values[column.name] = select.value === '' && column.isNullable ? null : select.value;
+    applyCellState(cell, model, column);
+    refreshPending();
+  });
+  select.addEventListener('focus', () => cell.classList.add('focused'));
+  select.addEventListener('blur', () => cell.classList.remove('focused'));
+  applyCellState(cell, model, column);
+  cell.appendChild(select);
+  return cell;
+}
+
+function openJsonModal(
+  model: RowModel,
+  column: ColumnMeta,
+  input: HTMLInputElement,
+  cell: HTMLTableCellElement,
+): void {
+  jsonTarget = { model, column, input, cell };
+  jsonModalText.value = prettyJson(model.values[column.name]);
+  jsonModalError.textContent = '';
+  jsonModal.hidden = false;
+  jsonModalText.focus();
+}
+
+function prettyJson(value: string | null): string {
+  if (value === null) {
+    return '';
+  }
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
+function saveJsonModal(): void {
+  if (!jsonTarget) {
+    return;
+  }
+  const text = jsonModalText.value.trim();
+  if (text !== '') {
+    try {
+      JSON.parse(text);
+    } catch (error) {
+      jsonModalError.textContent = `Invalid JSON: ${(error as Error).message}`;
+      return;
+    }
+  }
+  const { model, column, input, cell } = jsonTarget;
+  const next = text === '' ? (column.isNullable ? null : '') : JSON.stringify(JSON.parse(text));
+  model.values[column.name] = next;
+  input.value = next ?? '';
+  input.classList.toggle('null', next === null);
+  applyCellState(cell, model, column);
+  refreshPending();
+  closeJsonModal();
+}
+
+function closeJsonModal(): void {
+  jsonModal.hidden = true;
+  jsonTarget = null;
 }
 
 function readInput(input: HTMLInputElement, column: ColumnMeta): CellValue {

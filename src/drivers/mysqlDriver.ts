@@ -27,6 +27,8 @@ export class MysqlDriver implements DatabaseDriver {
       password: this.password,
       database: this.config.database || undefined,
       multipleStatements: false,
+      // Return DATE/DATETIME/TIMESTAMP as raw strings (no Date object, no timezone shift).
+      dateStrings: true,
     });
   }
 

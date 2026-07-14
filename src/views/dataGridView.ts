@@ -198,6 +198,17 @@ export class DataGridView {
       </select>
     </span>
   </div>
+  <div id="jsonModal" class="modal" hidden>
+    <div class="modal-box">
+      <div class="modal-title">Edit JSON</div>
+      <textarea id="jsonModalText" spellcheck="false"></textarea>
+      <div id="jsonModalError" class="modal-error"></div>
+      <div class="modal-actions">
+        <button id="jsonModalCancel">Cancel</button>
+        <button id="jsonModalSave" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

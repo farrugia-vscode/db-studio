@@ -68,13 +68,14 @@ body.tinted::before {
 }
 
 .toolbar #filter {
+  flex: 1;
+  min-width: 0;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, transparent);
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 12px;
-  width: 240px;
 }
 
 .toolbar #filter:focus {
@@ -237,6 +238,28 @@ td input.generated {
   opacity: 0.7;
 }
 
+td input.json {
+  cursor: pointer;
+}
+
+td.focused {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+}
+
+.cell-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--vscode-foreground);
+  padding: var(--cell-py) var(--cell-px);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 /* ---- Rows ---- */
 tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--vscode-list-hoverBackground) 35%, transparent);
@@ -316,4 +339,80 @@ body.resizing {
 
 body.resizing input {
   pointer-events: none;
+}
+
+/* ---- JSON modal ---- */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-box {
+  width: min(760px, 92vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 8px;
+}
+
+.modal-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+#jsonModalText {
+  flex: 1;
+  min-height: 320px;
+  resize: vertical;
+  padding: 12px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+}
+
+#jsonModalText:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.modal-error {
+  color: var(--vscode-errorForeground);
+  font-size: 12px;
+  min-height: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-actions button {
+  cursor: pointer;
+  border: none;
+  padding: 6px 18px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
+
+.modal-actions button.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
 }
