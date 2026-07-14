@@ -302,7 +302,8 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   const isInserted = model.original === null;
   // The DB fills auto-increment / identity columns itself, so a new row shows <generated>.
   const isGenerated = column.isAutoIncrement && isInserted;
-  const isReadOnly = !hasPrimaryKey || isGenerated || (column.isPrimaryKey && !isInserted);
+  // Primary keys stay editable: UPDATE matches on the ORIGINAL pk, so changing it is safe here.
+  const isReadOnly = !hasPrimaryKey || isGenerated;
   const value = model.values[column.name];
   input.value = value ?? '';
   input.readOnly = isReadOnly;
