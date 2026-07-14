@@ -2,57 +2,25 @@
 (() => {
   // src/webview/designer.ts
   var api = acquireVsCodeApi();
-  var TYPES = {
+  var TYPE_GROUPS = {
     mysql: [
-      "int",
-      "bigint",
-      "tinyint",
-      "smallint",
-      "mediumint",
-      "decimal",
-      "float",
-      "double",
-      "boolean",
-      "varchar",
-      "char",
-      "text",
-      "tinytext",
-      "mediumtext",
-      "longtext",
-      "json",
-      "date",
-      "datetime",
-      "timestamp",
-      "time",
-      "year",
-      "binary",
-      "varbinary",
-      "blob"
+      { label: "Numeric", types: ["int", "bigint", "tinyint", "smallint", "mediumint", "decimal", "float", "double"] },
+      { label: "Text", types: ["varchar", "char", "text", "tinytext", "mediumtext", "longtext", "json"] },
+      { label: "Date & time", types: ["date", "datetime", "timestamp", "time", "year"] },
+      { label: "Boolean", types: ["boolean"] },
+      { label: "Binary", types: ["binary", "varbinary", "blob"] }
     ],
     postgres: [
-      "integer",
-      "bigint",
-      "smallint",
-      "serial",
-      "bigserial",
-      "numeric",
-      "real",
-      "double precision",
-      "boolean",
-      "varchar",
-      "char",
-      "text",
-      "json",
-      "jsonb",
-      "uuid",
-      "date",
-      "timestamp",
-      "timestamptz",
-      "time",
-      "bytea"
+      { label: "Numeric", types: ["integer", "bigint", "smallint", "serial", "bigserial", "numeric", "real", "double precision"] },
+      { label: "Text", types: ["varchar", "char", "text", "json", "jsonb", "uuid"] },
+      { label: "Date & time", types: ["date", "timestamp", "timestamptz", "time"] },
+      { label: "Boolean", types: ["boolean"] },
+      { label: "Binary", types: ["bytea"] }
     ]
   };
-  var SIZEABLE = /* @__PURE__ */ new Set(["varchar", "char", "varbinary", "binary", "decimal", "numeric"]);
+  function flatTypes(kind) {
+    return TYPE_GROUPS[kind].flatMap((group) => group.types);
+  }
   var mode = "create";
   var driver = "mysql";
   var columns = [];
@@ -107,7 +75,7 @@
     columns.push({
       originalName: null,
       name: "",
-      type: TYPES[driver][0],
+      type: flatTypes(driver)[0],
       isNullable: true,
       isPrimaryKey: false,
       isAutoIncrement: false,
@@ -136,11 +104,16 @@
   }
   function appendTypeCells(row, draft) {
     const parsed = splitType(draft.type);
-    const list = TYPES[driver];
+    const list = flatTypes(driver);
     const typeCell = document.createElement("td");
     const select = document.createElement("select");
-    for (const type of list) {
-      select.appendChild(new Option(type, type));
+    for (const group of TYPE_GROUPS[driver]) {
+      const optgroup = document.createElement("optgroup");
+      optgroup.label = group.label;
+      for (const type of group.types) {
+        optgroup.appendChild(new Option(type, type));
+      }
+      select.appendChild(optgroup);
     }
     if (parsed.base && !list.includes(parsed.base)) {
       select.appendChild(new Option(parsed.base, parsed.base));
@@ -151,10 +124,8 @@
     const sizeInput = document.createElement("input");
     sizeInput.value = parsed.size;
     sizeInput.placeholder = "size";
-    sizeInput.disabled = !SIZEABLE.has(select.value);
     sizeCell.appendChild(sizeInput);
     const update = () => {
-      sizeInput.disabled = !SIZEABLE.has(select.value);
       draft.type = combineType(select.value, sizeInput.value);
       changed();
     };
@@ -171,7 +142,7 @@
     return { base: type.trim().toLowerCase(), size: "" };
   }
   function combineType(base, size) {
-    return SIZEABLE.has(base) && size.trim() !== "" ? `${base}(${size})` : base;
+    return size.trim() !== "" ? `${base}(${size})` : base;
   }
   function buildActions(draft, index) {
     const cell = document.createElement("td");

@@ -8,20 +8,26 @@ declare function acquireVsCodeApi(): VsCodeApi;
 
 const api = acquireVsCodeApi();
 
-const TYPES: Record<DriverKind, string[]> = {
+const TYPE_GROUPS: Record<DriverKind, Array<{ label: string; types: string[] }>> = {
   mysql: [
-    'int', 'bigint', 'tinyint', 'smallint', 'mediumint', 'decimal', 'float', 'double', 'boolean',
-    'varchar', 'char', 'text', 'tinytext', 'mediumtext', 'longtext', 'json',
-    'date', 'datetime', 'timestamp', 'time', 'year', 'binary', 'varbinary', 'blob',
+    { label: 'Numeric', types: ['int', 'bigint', 'tinyint', 'smallint', 'mediumint', 'decimal', 'float', 'double'] },
+    { label: 'Text', types: ['varchar', 'char', 'text', 'tinytext', 'mediumtext', 'longtext', 'json'] },
+    { label: 'Date & time', types: ['date', 'datetime', 'timestamp', 'time', 'year'] },
+    { label: 'Boolean', types: ['boolean'] },
+    { label: 'Binary', types: ['binary', 'varbinary', 'blob'] },
   ],
   postgres: [
-    'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'numeric', 'real', 'double precision', 'boolean',
-    'varchar', 'char', 'text', 'json', 'jsonb', 'uuid',
-    'date', 'timestamp', 'timestamptz', 'time', 'bytea',
+    { label: 'Numeric', types: ['integer', 'bigint', 'smallint', 'serial', 'bigserial', 'numeric', 'real', 'double precision'] },
+    { label: 'Text', types: ['varchar', 'char', 'text', 'json', 'jsonb', 'uuid'] },
+    { label: 'Date & time', types: ['date', 'timestamp', 'timestamptz', 'time'] },
+    { label: 'Boolean', types: ['boolean'] },
+    { label: 'Binary', types: ['bytea'] },
   ],
 };
-const SIZEABLE = new Set(['varchar', 'char', 'varbinary', 'binary', 'decimal', 'numeric']);
 
+function flatTypes(kind: DriverKind): string[] {
+  return TYPE_GROUPS[kind].flatMap((group) => group.types);
+}
 let mode: 'create' | 'modify' = 'create';
 let driver: DriverKind = 'mysql';
 let columns: ColumnDraft[] = [];
@@ -86,7 +92,7 @@ function addColumn(): void {
   columns.push({
     originalName: null,
     name: '',
-    type: TYPES[driver][0],
+    type: flatTypes(driver)[0],
     isNullable: true,
     isPrimaryKey: false,
     isAutoIncrement: false,
@@ -118,12 +124,17 @@ function buildRow(draft: ColumnDraft, index: number): HTMLTableRowElement {
 
 function appendTypeCells(row: HTMLTableRowElement, draft: ColumnDraft): void {
   const parsed = splitType(draft.type);
-  const list = TYPES[driver];
+  const list = flatTypes(driver);
 
   const typeCell = document.createElement('td');
   const select = document.createElement('select');
-  for (const type of list) {
-    select.appendChild(new Option(type, type));
+  for (const group of TYPE_GROUPS[driver]) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = group.label;
+    for (const type of group.types) {
+      optgroup.appendChild(new Option(type, type));
+    }
+    select.appendChild(optgroup);
   }
   if (parsed.base && !list.includes(parsed.base)) {
     select.appendChild(new Option(parsed.base, parsed.base));
@@ -135,11 +146,9 @@ function appendTypeCells(row: HTMLTableRowElement, draft: ColumnDraft): void {
   const sizeInput = document.createElement('input');
   sizeInput.value = parsed.size;
   sizeInput.placeholder = 'size';
-  sizeInput.disabled = !SIZEABLE.has(select.value);
   sizeCell.appendChild(sizeInput);
 
   const update = (): void => {
-    sizeInput.disabled = !SIZEABLE.has(select.value);
     draft.type = combineType(select.value, sizeInput.value);
     changed();
   };
@@ -159,7 +168,7 @@ function splitType(type: string): { base: string; size: string } {
 }
 
 function combineType(base: string, size: string): string {
-  return SIZEABLE.has(base) && size.trim() !== '' ? `${base}(${size})` : base;
+  return size.trim() !== '' ? `${base}(${size})` : base;
 }
 
 function buildActions(draft: ColumnDraft, index: number): HTMLTableCellElement {
