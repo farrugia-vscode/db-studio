@@ -12,6 +12,7 @@ import { ExportService } from './views/exportService';
 import type { ExportFormat } from './domain/exportFormat';
 import { DDL_SCHEME, DdlContentProvider, buildDdlUri, buildObjectDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
+import { VISIBLE_PREFIX } from './views/schemaTreeProvider';
 
 let manager: ConnectionManager;
 let treeProvider: SchemaTreeProvider;
@@ -21,10 +22,12 @@ let dataGridView: DataGridView;
 let designerView: TableDesignerView;
 let sqlConsoleView: SqlConsoleView;
 let exportService: ExportService;
+let extensionContext: vscode.ExtensionContext;
 
 export function activate(context: vscode.ExtensionContext): void {
+  extensionContext = context;
   manager = new ConnectionManager(context, new DriverFactory());
-  treeProvider = new SchemaTreeProvider(manager, new ConnectionIconProvider(context));
+  treeProvider = new SchemaTreeProvider(manager, new ConnectionIconProvider(context), context);
   formView = new ConnectionFormView(context, manager, (name) => {
     treeProvider.refresh();
     dataGridView.updateColor(name);
@@ -56,6 +59,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.exportTable', (node?: SchemaNode) => exportTable(node)),
     vscode.commands.registerCommand('dbStudio.duplicateConnection', (node?: SchemaNode) => duplicateConnection(node)),
     vscode.commands.registerCommand('dbStudio.findTable', (node?: SchemaNode) => findTable(node)),
+    vscode.commands.registerCommand('dbStudio.selectDatabases', (node?: SchemaNode) => selectDatabases(node)),
   );
 }
 
@@ -124,6 +128,32 @@ async function modifyTable(node?: SchemaNode): Promise<void> {
 export async function deactivate(): Promise<void> {
   if (manager) {
     await manager.closeAll();
+  }
+}
+
+/** Choose which databases/schemas of a connection are shown in the tree (empty selection = all). */
+async function selectDatabases(node?: SchemaNode): Promise<void> {
+  const name = node ? node.connectionName : await pickConnectionName();
+  if (!name) {
+    return;
+  }
+  try {
+    const driver = await manager.getDriver(name);
+    const all = await driver.listNamespaces();
+    const stored = extensionContext.globalState.get<string[]>(VISIBLE_PREFIX + name, []);
+    const picked = await vscode.window.showQuickPick(
+      all.map((namespace) => ({ label: namespace, picked: stored.length === 0 || stored.includes(namespace) })),
+      { canPickMany: true, placeHolder: 'Databases to show (none selected = show all)' },
+    );
+    if (picked === undefined) {
+      return;
+    }
+    // Selecting every database is equivalent to "show all" → store an empty list.
+    const selection = picked.length === all.length ? [] : picked.map((item) => item.label);
+    await extensionContext.globalState.update(VISIBLE_PREFIX + name, selection);
+    treeProvider.refresh();
+  } catch (error) {
+    reportError(error);
   }
 }
 

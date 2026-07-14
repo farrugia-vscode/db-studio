@@ -132,6 +132,11 @@
         "title": "Find Table…",
         "icon": "$(search)",
         "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.selectDatabases",
+        "title": "Select Databases…",
+        "category": "DB Studio"
       }
     ],
     "menus": {
@@ -182,6 +187,11 @@
           "command": "dbStudio.findTable",
           "when": "view == dbStudio.explorer && viewItem == connection",
           "group": "0_new@3"
+        },
+        {
+          "command": "dbStudio.selectDatabases",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "1_manage@4"
         },
         {
           "command": "dbStudio.openTableData",

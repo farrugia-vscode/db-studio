@@ -6,6 +6,7 @@ import { GroupKind, SchemaNode } from './schemaNode';
 
 const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
 const None = vscode.TreeItemCollapsibleState.None;
+export const VISIBLE_PREFIX = 'dbStudio.visibleNamespaces.';
 
 /**
  * Lazily builds the schema tree: connection → namespace → table → column.
@@ -18,6 +19,7 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
   constructor(
     private readonly manager: ConnectionManager,
     private readonly icons: ConnectionIconProvider,
+    private readonly context: vscode.ExtensionContext,
   ) {}
 
   refresh(): void {
@@ -59,7 +61,10 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
 
   private async buildNamespaceNodes(parent: SchemaNode): Promise<SchemaNode[]> {
     const driver = await this.manager.getDriver(parent.connectionName);
-    const namespaces = await driver.listNamespaces();
+    const all = await driver.listNamespaces();
+    // An empty/unset visibility list means "show all".
+    const visible = this.context.globalState.get<string[]>(VISIBLE_PREFIX + parent.connectionName, []);
+    const namespaces = visible.length > 0 ? all.filter((namespace) => visible.includes(namespace)) : all;
     return namespaces.map((namespace) => {
       const node = new SchemaNode('namespace', namespace, Collapsed, parent.connectionName, namespace);
       node.iconPath = new vscode.ThemeIcon('symbol-namespace');
