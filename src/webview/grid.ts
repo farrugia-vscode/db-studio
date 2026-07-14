@@ -405,7 +405,7 @@ function appendUpdate(edits: EditDto[], model: RowModel, original: Record<string
 function refreshPending(): void {
   const count = computeEdits().length;
   const dirty = hasLocalChanges();
-  commitButton.disabled = count === 0;
+  commitButton.hidden = count === 0;
   status.textContent = count > 0 ? `${count} pending change(s)` : dirty ? 'unsaved changes' : '';
 }
 

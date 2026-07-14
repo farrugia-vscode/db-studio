@@ -41,7 +41,7 @@ body.tinted::before {
   cursor: pointer;
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);
-  border: none;
+  border: 1px solid var(--vscode-panel-border);
   padding: 5px 16px;
   border-radius: 4px;
   font-size: 12px;
@@ -49,11 +49,13 @@ body.tinted::before {
 
 .toolbar button:hover {
   background: var(--vscode-button-secondaryHoverBackground);
+  border-color: var(--vscode-focusBorder);
 }
 
 .toolbar button.primary {
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
+  border-color: var(--vscode-button-background);
 }
 
 .toolbar button.primary:hover {

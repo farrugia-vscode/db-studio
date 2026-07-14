@@ -175,7 +175,7 @@ export class DataGridView {
 <body>
   <div class="toolbar">
     <input id="filter" type="search" placeholder="WHERE condition — e.g. name = 'Paris Taxi'  ·  Enter to run" spellcheck="false">
-    <button id="commit" class="primary" disabled>Commit</button>
+    <button id="commit" class="primary" hidden>Commit</button>
     <span id="status"></span>
     <button id="reload" title="Reload from the database (discards unsaved changes)">Reload</button>
   </div>
