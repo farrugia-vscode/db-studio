@@ -8,6 +8,8 @@ import { ResultsView } from './views/resultsView';
 import { DataGridView } from './views/dataGridView';
 import { TableDesignerView } from './views/tableDesignerView';
 import { SqlConsoleView } from './views/sqlConsoleView';
+import { ExportService } from './views/exportService';
+import type { ExportFormat } from './domain/exportFormat';
 import { DDL_SCHEME, DdlContentProvider, buildDdlUri, buildObjectDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
 
@@ -18,6 +20,7 @@ let resultsView: ResultsView;
 let dataGridView: DataGridView;
 let designerView: TableDesignerView;
 let sqlConsoleView: SqlConsoleView;
+let exportService: ExportService;
 
 export function activate(context: vscode.ExtensionContext): void {
   manager = new ConnectionManager(context, new DriverFactory());
@@ -30,6 +33,7 @@ export function activate(context: vscode.ExtensionContext): void {
   dataGridView = new DataGridView(context, manager);
   designerView = new TableDesignerView(context, manager, () => treeProvider.refresh());
   sqlConsoleView = new SqlConsoleView(context, manager);
+  exportService = new ExportService(manager);
 
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(DDL_SCHEME, new DdlContentProvider(manager)),
@@ -49,6 +53,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.createDatabase', (node?: SchemaNode) => createDatabase(node)),
     vscode.commands.registerCommand('dbStudio.dropDatabase', (node?: SchemaNode) => dropDatabase(node)),
     vscode.commands.registerCommand('dbStudio.openSqlConsole', (node?: SchemaNode) => openSqlConsole(node)),
+    vscode.commands.registerCommand('dbStudio.exportTable', (node?: SchemaNode) => exportTable(node)),
   );
 }
 
@@ -202,6 +207,33 @@ async function showTableDdl(node?: SchemaNode): Promise<void> {
     );
     await vscode.languages.setTextDocumentLanguage(document, 'sql');
     await vscode.window.showTextDocument(document, { preview: true });
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function exportTable(node?: SchemaNode): Promise<void> {
+  const isTable = node?.kind === 'table';
+  const isView = node?.kind === 'object' && node.objectKind === 'view';
+  if (!node || (!isTable && !isView) || !node.namespace || !node.table) {
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: 'CSV', format: 'csv' as ExportFormat },
+      { label: 'JSON', format: 'json' as ExportFormat },
+      { label: 'SQL (INSERT statements)', format: 'sql' as ExportFormat },
+    ],
+    { placeHolder: `Export "${node.table}" as…` },
+  );
+  if (!picked) {
+    return;
+  }
+  try {
+    await exportService.exportTable(
+      { connectionName: node.connectionName, namespace: node.namespace, table: node.table },
+      picked.format,
+    );
   } catch (error) {
     reportError(error);
   }

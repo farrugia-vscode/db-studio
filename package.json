@@ -82,6 +82,11 @@
         "category": "DB Studio"
       },
       {
+        "command": "dbStudio.exportTable",
+        "title": "Export Data…",
+        "category": "DB Studio"
+      },
+      {
         "command": "dbStudio.emptyTable",
         "title": "Empty Table…",
         "category": "DB Studio"
@@ -186,6 +191,16 @@
           "command": "dbStudio.showTableDdl",
           "when": "view == dbStudio.explorer && viewItem == table",
           "group": "2_table@2"
+        },
+        {
+          "command": "dbStudio.exportTable",
+          "when": "view == dbStudio.explorer && viewItem == table",
+          "group": "2_table@3"
+        },
+        {
+          "command": "dbStudio.exportTable",
+          "when": "view == dbStudio.explorer && viewItem == object",
+          "group": "9_export@1"
         },
         {
           "command": "dbStudio.emptyTable",
