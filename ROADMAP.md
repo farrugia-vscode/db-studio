@@ -10,7 +10,8 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Editable name with rename (moves config + secret)
 - [x] Driver icons (🐬 MySQL/MariaDB, 🐘 PostgreSQL)
 - [x] Edit / Remove via right-click
-- [ ] Duplicate connection
+- [x] Duplicate connection (config + password, unique name)
+- [x] Find table / view across schemas (fuzzy quick-pick → opens data)
 - [ ] Group / reorder connections
 
 ## Schema tree
@@ -23,9 +24,9 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Indexes, unique constraints and foreign keys in the designer
 - [x] Views, procedures, functions, triggers, sequences (grouped folders, per non-empty family)
 - [x] Views open their data; routines/triggers/sequences show read-only DDL
-- [ ] Select which databases/schemas to display per connection
-- [ ] Show / hide columns in the data grid
-- [ ] Filter/search the tree
+- [x] Select which databases/schemas to display per connection
+- [x] Show / hide columns in the data grid (toolbar checklist)
+- [x] Search across the tree via "Find table…" (fuzzy quick-pick)
 
 ## Data grid
 - [x] Editable cells, add + delete rows, Commit (UPDATE / INSERT / DELETE by PK)
@@ -47,17 +48,17 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Excel-like rectangular selection (mouse + Shift), fill-down (Ctrl+D), paste (Ctrl+V)
 - [x] Format-aware copy (Ctrl+C → TSV / CSV / JSON / INSERT, chosen in the toolbar)
 - [x] Undo / redo of cell & row edits (Ctrl+Z / Ctrl+Y)
-- [ ] Hide / show columns
 
 ## SQL
 - [x] Run SQL from selection / active `.sql` file / prompt → results grid (tinted)
 - [x] Full SQL console window (per-connection, auto-saved editor, Ctrl+Enter run)
 - [x] Schema-aware autocompletion (tables, columns, keywords; alias-aware `.` columns)
-- [ ] Query history
+- [x] Query history (per connection, click a past query to reuse)
 
 ## Import / export
-- [ ] CSV export & import
-- [ ] SQL dump
+- [x] Export a table / view to CSV, JSON or SQL inserts (right-click → Export Data)
+- [~] SQL dump — planned (full-database dump; per-table SQL export already available)
+- [x] ~~CSV import~~ — dropped (dump-based workflow preferred)
 
 ## Color recognition note
 VS Code exposes no API to color an editor **tab** or a **tree row/panel** background.
