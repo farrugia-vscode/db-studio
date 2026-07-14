@@ -68,10 +68,21 @@ export interface SortMessage {
   direction: 'ASC' | 'DESC';
 }
 
+export type CopyFormat = 'json' | 'csv' | 'tsv' | 'insert';
+
+/** Copy a selected cell range to the clipboard in the chosen format. */
+export interface CopyMessage {
+  type: 'copy';
+  format: CopyFormat;
+  columns: string[];
+  rows: Array<Array<string | null>>;
+}
+
 export type WebviewToExtension =
   | ReadyMessage
   | ReloadMessage
   | CommitMessage
   | FilterMessage
   | PageMessage
-  | SortMessage;
+  | SortMessage
+  | CopyMessage;

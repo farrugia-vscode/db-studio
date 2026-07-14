@@ -44,6 +44,7 @@ const pagerNext = element<HTMLButtonElement>('pagerNext');
 const pagerLast = element<HTMLButtonElement>('pagerLast');
 const pagerInfo = element<HTMLSpanElement>('pagerInfo');
 const pageSizeInput = element<HTMLSelectElement>('pageSize');
+const copyFormatSelect = element<HTMLSelectElement>('copyFormat');
 
 let total = 0;
 let offset = 0;
@@ -51,21 +52,161 @@ let pageSize = 100;
 let orderColumn = '';
 let orderDir: 'ASC' | 'DESC' = 'ASC';
 
+// Excel-like rectangular selection (cell coordinates into rowModels / columns).
+let selAnchor: { r: number; c: number } | null = null;
+let selFocus: { r: number; c: number } | null = null;
+let selecting = false;
+
 commitButton.addEventListener('click', commit);
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 // The 'search' event fires on Enter and when the native clear (×) is clicked.
 filterInput.addEventListener('search', () => api.postMessage({ type: 'filter', value: filterInput.value }));
 
-// Ctrl/Cmd+C on a focused cell copies its whole value when nothing is selected.
-document.addEventListener('keydown', (event) => {
-  if (!(event.ctrlKey || event.metaKey) || event.key !== 'c') {
+grid.addEventListener('mousedown', onGridMouseDown);
+grid.addEventListener('mousemove', onGridMouseMove);
+document.addEventListener('mouseup', () => {
+  selecting = false;
+});
+document.addEventListener('keydown', onGridKeydown);
+
+function onGridMouseDown(event: MouseEvent): void {
+  const td = (event.target as HTMLElement).closest('td[data-r]') as HTMLTableCellElement | null;
+  if (!td) {
+    return;
+  }
+  const cell = { r: Number(td.dataset.r), c: Number(td.dataset.c) };
+  if (event.shiftKey && selAnchor) {
+    selFocus = cell;
+  } else {
+    selAnchor = cell;
+    selFocus = cell;
+  }
+  selecting = true;
+  renderSelection();
+}
+
+function onGridMouseMove(event: MouseEvent): void {
+  if (!selecting) {
+    return;
+  }
+  const td = (event.target as HTMLElement).closest('td[data-r]') as HTMLTableCellElement | null;
+  if (td) {
+    selFocus = { r: Number(td.dataset.r), c: Number(td.dataset.c) };
+    renderSelection();
+  }
+}
+
+function onGridKeydown(event: KeyboardEvent): void {
+  if (!(event.ctrlKey || event.metaKey) || !selRect()) {
     return;
   }
   const active = document.activeElement;
-  if (active instanceof HTMLInputElement && active.closest('td') && active.selectionStart === active.selectionEnd) {
-    void navigator.clipboard.writeText(active.value);
+  if (active instanceof HTMLInputElement && !active.readOnly) {
+    return; // editing a cell — let the input handle the shortcut
   }
-});
+  if (event.key === 'c') {
+    event.preventDefault();
+    copySelection();
+  } else if (event.key === 'd') {
+    event.preventDefault();
+    fillDown();
+  } else if (event.key === 'v') {
+    event.preventDefault();
+    void pasteSelection();
+  }
+}
+
+function selRect(): { r1: number; r2: number; c1: number; c2: number } | null {
+  if (!selAnchor || !selFocus) {
+    return null;
+  }
+  return {
+    r1: Math.min(selAnchor.r, selFocus.r),
+    r2: Math.max(selAnchor.r, selFocus.r),
+    c1: Math.min(selAnchor.c, selFocus.c),
+    c2: Math.max(selAnchor.c, selFocus.c),
+  };
+}
+
+function renderSelection(): void {
+  const rect = selRect();
+  for (const td of grid.querySelectorAll<HTMLTableCellElement>('td[data-r]')) {
+    const r = Number(td.dataset.r);
+    const c = Number(td.dataset.c);
+    td.classList.toggle('sel', rect !== null && r >= rect.r1 && r <= rect.r2 && c >= rect.c1 && c <= rect.c2);
+  }
+}
+
+function copySelection(): void {
+  const rect = selRect();
+  if (!rect) {
+    return;
+  }
+  const cols: string[] = [];
+  for (let c = rect.c1; c <= rect.c2; c += 1) {
+    cols.push(columns[c].name);
+  }
+  const rows: Array<Array<string | null>> = [];
+  for (let r = rect.r1; r <= rect.r2; r += 1) {
+    const model = rowModels[r];
+    if (model) {
+      rows.push(cols.map((name) => model.values[name]));
+    }
+  }
+  api.postMessage({ type: 'copy', format: copyFormatSelect.value as 'json' | 'csv' | 'tsv' | 'insert', columns: cols, rows });
+}
+
+function fillDown(): void {
+  const rect = selRect();
+  if (!rect || !hasPrimaryKey) {
+    return;
+  }
+  const anchor = selAnchor;
+  const focus = selFocus;
+  for (let c = rect.c1; c <= rect.c2; c += 1) {
+    const name = columns[c].name;
+    const topValue = rowModels[rect.r1]?.values[name] ?? null;
+    for (let r = rect.r1 + 1; r <= rect.r2; r += 1) {
+      const model = rowModels[r];
+      if (model) {
+        model.values[name] = topValue;
+      }
+    }
+  }
+  render();
+  selAnchor = anchor;
+  selFocus = focus;
+  renderSelection();
+  refreshPending();
+}
+
+async function pasteSelection(): Promise<void> {
+  const rect = selRect();
+  if (!rect || !hasPrimaryKey) {
+    return;
+  }
+  const text = await navigator.clipboard.readText();
+  const lines = text.replace(/\r/g, '').replace(/\n$/, '').split('\n');
+  const anchor = selAnchor;
+  const focus = selFocus;
+  lines.forEach((line, rowOffset) => {
+    const model = rowModels[rect.r1 + rowOffset];
+    if (!model) {
+      return;
+    }
+    line.split('\t').forEach((cellValue, colOffset) => {
+      const column = columns[rect.c1 + colOffset];
+      if (column) {
+        model.values[column.name] = cellValue === '' && column.isNullable ? null : cellValue;
+      }
+    });
+  });
+  render();
+  selAnchor = anchor;
+  selFocus = focus;
+  renderSelection();
+  refreshPending();
+}
 pagerFirst.addEventListener('click', () => goToOffset(0));
 pagerPrev.addEventListener('click', () => goToOffset(offset - pageSize));
 pagerNext.addEventListener('click', () => goToOffset(offset + pageSize));
@@ -310,19 +451,20 @@ function updateCellFont(): void {
 
 function buildBody(): HTMLTableSectionElement {
   const body = document.createElement('tbody');
-  for (const model of rowModels) {
-    body.appendChild(buildRow(model));
-  }
+  rowModels.forEach((model, rowIndex) => body.appendChild(buildRow(model, rowIndex)));
   return body;
 }
 
-function buildRow(model: RowModel): HTMLTableRowElement {
+function buildRow(model: RowModel, rowIndex: number): HTMLTableRowElement {
   const row = document.createElement('tr');
   applyRowState(row, model);
   row.appendChild(buildDeleteCell(model, row));
-  for (const column of columns) {
-    row.appendChild(buildCell(model, column));
-  }
+  columns.forEach((column, colIndex) => {
+    const cell = buildCell(model, column);
+    cell.dataset.r = String(rowIndex);
+    cell.dataset.c = String(colIndex);
+    row.appendChild(cell);
+  });
   return row;
 }
 
