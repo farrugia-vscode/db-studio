@@ -18,7 +18,10 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Colored connection icon
 - [x] Double-click a table → open its data
 - [x] Show table DDL (right-click → Show DDL)
+- [x] Drop / empty table (right-click, modal confirmation)
+- [ ] Edit DDL / alter table (to spec)
 - [ ] Select which databases/schemas to display per connection
+- [ ] Show / hide columns in the data grid
 - [ ] Show indexes, foreign keys, views
 - [ ] Filter/search the tree
 

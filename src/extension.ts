@@ -35,6 +35,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.runQuery', (node?: SchemaNode) => runQuery(node)),
     vscode.commands.registerCommand('dbStudio.openTableData', (node?: SchemaNode) => openTableData(node)),
     vscode.commands.registerCommand('dbStudio.showTableDdl', (node?: SchemaNode) => showTableDdl(node)),
+    vscode.commands.registerCommand('dbStudio.emptyTable', (node?: SchemaNode) => emptyTable(node)),
+    vscode.commands.registerCommand('dbStudio.dropTable', (node?: SchemaNode) => dropTable(node)),
   );
 }
 
@@ -108,6 +110,52 @@ async function showTableDdl(node?: SchemaNode): Promise<void> {
     );
     await vscode.languages.setTextDocumentLanguage(document, 'sql');
     await vscode.window.showTextDocument(document, { preview: true });
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function emptyTable(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'table' || !node.namespace || !node.table) {
+    return;
+  }
+  const confirmed = await vscode.window.showWarningMessage(
+    `Empty table "${node.table}"? All rows will be deleted — this cannot be undone.`,
+    { modal: true },
+    'Empty',
+  );
+  if (confirmed !== 'Empty') {
+    return;
+  }
+  await runTableStatement(node, (ref) => `TRUNCATE TABLE ${ref}`, `Table "${node.table}" emptied.`);
+}
+
+async function dropTable(node?: SchemaNode): Promise<void> {
+  if (!node || node.kind !== 'table' || !node.namespace || !node.table) {
+    return;
+  }
+  const confirmed = await vscode.window.showWarningMessage(
+    `Drop table "${node.table}"? The table and its data are removed — this cannot be undone.`,
+    { modal: true },
+    'Drop',
+  );
+  if (confirmed !== 'Drop') {
+    return;
+  }
+  await runTableStatement(node, (ref) => `DROP TABLE ${ref}`, `Table "${node.table}" dropped.`);
+}
+
+async function runTableStatement(
+  node: SchemaNode,
+  buildSql: (ref: string) => string,
+  successMessage: string,
+): Promise<void> {
+  try {
+    const driver = await manager.getDriver(node.connectionName);
+    const ref = driver.buildTableRef(node.namespace!, node.table!);
+    await driver.query(buildSql(ref));
+    treeProvider.refresh();
+    vscode.window.showInformationMessage(`DB Studio: ${successMessage}`);
   } catch (error) {
     reportError(error);
   }

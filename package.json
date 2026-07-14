@@ -2,7 +2,7 @@
   "name": "db-studio",
   "displayName": "DB Studio",
   "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL)",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "farrugia",
   "icon": "icon.png",
   "engines": {
@@ -75,6 +75,16 @@
         "command": "dbStudio.showTableDdl",
         "title": "Show DDL",
         "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.emptyTable",
+        "title": "Empty Table…",
+        "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.dropTable",
+        "title": "Drop Table…",
+        "category": "DB Studio"
       }
     ],
     "menus": {
@@ -120,6 +130,16 @@
           "command": "dbStudio.showTableDdl",
           "when": "view == dbStudio.explorer && viewItem == table",
           "group": "2_table@1"
+        },
+        {
+          "command": "dbStudio.emptyTable",
+          "when": "view == dbStudio.explorer && viewItem == table",
+          "group": "9_danger@1"
+        },
+        {
+          "command": "dbStudio.dropTable",
+          "when": "view == dbStudio.explorer && viewItem == table",
+          "group": "9_danger@2"
         }
       ]
     },

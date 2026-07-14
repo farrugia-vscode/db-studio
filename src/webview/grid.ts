@@ -266,7 +266,9 @@ function measureColumn(index: number, maxWidth: number): number {
       widest = width;
     }
   }
-  return Math.min(maxWidth, Math.max(MIN_WIDTH, Math.ceil(widest) + CELL_PADDING));
+  // Date columns need extra room for the native field's calendar/spinner controls in edit mode.
+  const extra = isDate ? 34 : 0;
+  return Math.min(maxWidth, Math.max(MIN_WIDTH, Math.ceil(widest) + CELL_PADDING + extra));
 }
 
 function updateCellFont(): void {
