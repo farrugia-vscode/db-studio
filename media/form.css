@@ -84,51 +84,10 @@ input:read-only {
   width: 90px;
 }
 
-.icon-field input {
+.icon-field select {
   text-align: center;
   font-size: 16px;
-}
-
-.color-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-input[type='color'] {
-  width: 40px;
-  height: 26px;
-  padding: 0;
   cursor: pointer;
-}
-
-#swatches {
-  display: flex;
-  gap: 4px;
-}
-
-.swatch {
-  width: 18px;
-  height: 18px;
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 50%;
-  cursor: pointer;
-  padding: 0;
-}
-
-#clearColor {
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground);
-  background: transparent;
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 2px;
-  padding: 3px 8px;
-  cursor: pointer;
-}
-
-#clearColor.active {
-  color: var(--vscode-foreground);
-  border-color: var(--vscode-focusBorder);
 }
 
 .result {

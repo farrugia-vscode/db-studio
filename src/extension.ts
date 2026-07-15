@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { DriverFactory } from './drivers/driverFactory';
 import { ConnectionManager } from './connections/connectionManager';
 import { SchemaTreeProvider } from './views/schemaTreeProvider';
-import { ConnectionIconProvider } from './views/connectionIconProvider';
 import { ConnectionFormView } from './views/connectionFormView';
 import { ResultsView } from './views/resultsView';
 import { DataGridView } from './views/dataGridView';
@@ -12,7 +11,7 @@ import { ExportService } from './views/exportService';
 import type { ExportFormat } from './domain/exportFormat';
 import { DDL_SCHEME, DdlContentProvider, buildDdlUri, buildObjectDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
-import { VISIBLE_PREFIX } from './views/schemaTreeProvider';
+import { VISIBLE_PREFIX, VISIBLE_CONNECTIONS_KEY } from './views/schemaTreeProvider';
 
 let manager: ConnectionManager;
 let treeProvider: SchemaTreeProvider;
@@ -27,10 +26,10 @@ let extensionContext: vscode.ExtensionContext;
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
   manager = new ConnectionManager(context, new DriverFactory());
-  treeProvider = new SchemaTreeProvider(manager, new ConnectionIconProvider(context), context);
-  formView = new ConnectionFormView(context, manager, (name) => {
+  void manager.clearGlobalConnections();
+  treeProvider = new SchemaTreeProvider(manager, context);
+  formView = new ConnectionFormView(context, manager, () => {
     treeProvider.refresh();
-    dataGridView.updateColor(name);
   });
   resultsView = new ResultsView();
   dataGridView = new DataGridView(context, manager);
@@ -60,7 +59,33 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.duplicateConnection', (node?: SchemaNode) => duplicateConnection(node)),
     vscode.commands.registerCommand('dbStudio.findTable', (node?: SchemaNode) => findTable(node)),
     vscode.commands.registerCommand('dbStudio.selectDatabases', (node?: SchemaNode) => selectDatabases(node)),
+    vscode.commands.registerCommand('dbStudio.selectConnections', () => selectConnections()),
   );
+}
+
+/** Choose which connections are shown in the tree (empty selection = all). */
+async function selectConnections(): Promise<void> {
+  const connections = manager.getConnections();
+  if (connections.length === 0) {
+    vscode.window.showWarningMessage('No connection configured. Run "DB Studio: Add Connection" first.');
+    return;
+  }
+  const stored = extensionContext.workspaceState.get<string[]>(VISIBLE_CONNECTIONS_KEY, []);
+  const picked = await vscode.window.showQuickPick(
+    connections.map((connection) => ({
+      label: connection.icon ? `${connection.icon} ${connection.name}` : connection.name,
+      connectionName: connection.name,
+      picked: stored.length === 0 || stored.includes(connection.name),
+    })),
+    { canPickMany: true, placeHolder: 'Connections to show (none selected = show all)' },
+  );
+  if (picked === undefined) {
+    return;
+  }
+  // Selecting every connection is equivalent to "show all" → store an empty list.
+  const selection = picked.length === connections.length ? [] : picked.map((item) => item.connectionName);
+  await extensionContext.workspaceState.update(VISIBLE_CONNECTIONS_KEY, selection);
+  treeProvider.refresh();
 }
 
 async function openSqlConsole(node?: SchemaNode): Promise<void> {
@@ -140,7 +165,7 @@ async function selectDatabases(node?: SchemaNode): Promise<void> {
   try {
     const driver = await manager.getDriver(name);
     const all = await driver.listNamespaces();
-    const stored = extensionContext.globalState.get<string[]>(VISIBLE_PREFIX + name, []);
+    const stored = extensionContext.workspaceState.get<string[]>(VISIBLE_PREFIX + name, []);
     const picked = await vscode.window.showQuickPick(
       all.map((namespace) => ({ label: namespace, picked: stored.length === 0 || stored.includes(namespace) })),
       { canPickMany: true, placeHolder: 'Databases to show (none selected = show all)' },
@@ -150,7 +175,7 @@ async function selectDatabases(node?: SchemaNode): Promise<void> {
     }
     // Selecting every database is equivalent to "show all" → store an empty list.
     const selection = picked.length === all.length ? [] : picked.map((item) => item.label);
-    await extensionContext.globalState.update(VISIBLE_PREFIX + name, selection);
+    await extensionContext.workspaceState.update(VISIBLE_PREFIX + name, selection);
     treeProvider.refresh();
   } catch (error) {
     reportError(error);
@@ -238,7 +263,8 @@ async function runQuery(node?: SchemaNode): Promise<void> {
   try {
     const driver = await manager.getDriver(name);
     const result = await driver.query(sql);
-    resultsView.show(`Query · ${name}`, result, manager.getConnection(name)?.color);
+    const icon = manager.getConnection(name)?.icon;
+    resultsView.show(icon ? `${icon} Query · ${name}` : `Query · ${name}`, result);
   } catch (error) {
     reportError(error);
   }

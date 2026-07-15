@@ -137,6 +137,12 @@
         "command": "dbStudio.selectDatabases",
         "title": "Select Databases…",
         "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.selectConnections",
+        "title": "Select Connections…",
+        "icon": "$(filter)",
+        "category": "DB Studio"
       }
     ],
     "menus": {
@@ -147,9 +153,14 @@
           "group": "navigation@1"
         },
         {
-          "command": "dbStudio.refresh",
+          "command": "dbStudio.selectConnections",
           "when": "view == dbStudio.explorer",
           "group": "navigation@2"
+        },
+        {
+          "command": "dbStudio.refresh",
+          "when": "view == dbStudio.explorer",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -266,7 +277,7 @@
         "dbStudio.connections": {
           "type": "array",
           "default": [],
-          "description": "Saved database connections (passwords are stored separately in the OS secret storage).",
+          "description": "Saved database connections, scoped to the open folder/workspace (passwords are stored separately in the OS secret storage).",
           "items": {
             "type": "object",
             "required": [
@@ -298,13 +309,9 @@
               "database": {
                 "type": "string"
               },
-              "color": {
-                "type": "string",
-                "description": "Optional hex color (e.g. #4ec94e) tinting the connection in the tree."
-              },
               "icon": {
                 "type": "string",
-                "description": "Optional emoji shown before the connection name (e.g. 🚀)."
+                "description": "Optional colored-dot emoji shown before the connection name (e.g. 🔵)."
               }
             }
           }

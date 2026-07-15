@@ -7,9 +7,7 @@ export interface ConnectionConfig {
   port?: number;
   user: string;
   database?: string;
-  /** Optional hex color (e.g. `#4ec94e`) used to tint the connection in the tree. */
-  color?: string;
-  /** Optional emoji shown before the connection name in the tree (e.g. `🚀`). */
+  /** Optional colored-dot emoji shown before the connection name in the tree (e.g. `🔵`). */
   icon?: string;
 }
 

@@ -8,36 +8,27 @@ declare function acquireVsCodeApi(): VsCodeApi;
 
 const api = acquireVsCodeApi();
 
-const SWATCHES = ['#f14c4c', '#f5a623', '#f8e71c', '#4ec94e', '#4aa3ff', '#9b59b6', '#e879c0', '#8a8a8a'];
 const DEFAULT_PORTS: Record<DriverKind, string> = { mysql: '3306', postgres: '5432' };
 
 const form = byId<HTMLFormElement>('form');
 const nameInput = byId<HTMLInputElement>('name');
-const iconInput = byId<HTMLInputElement>('icon');
+const iconInput = byId<HTMLSelectElement>('icon');
 const driverPicker = byId<HTMLDivElement>('driverPicker');
 const hostInput = byId<HTMLInputElement>('host');
 const portInput = byId<HTMLInputElement>('port');
 const userInput = byId<HTMLInputElement>('user');
 const databaseInput = byId<HTMLInputElement>('database');
 const passwordInput = byId<HTMLInputElement>('password');
-const colorInput = byId<HTMLInputElement>('color');
-const swatches = byId<HTMLSpanElement>('swatches');
-const clearColorButton = byId<HTMLButtonElement>('clearColor');
 const cancelButton = byId<HTMLButtonElement>('cancel');
 const testButton = byId<HTMLButtonElement>('test');
 const result = byId<HTMLDivElement>('result');
 
-let useColor = true;
 let selectedDriver: DriverKind = 'mysql';
-
-buildSwatches();
 
 for (const button of driverPicker.querySelectorAll<HTMLButtonElement>('.driver-option')) {
   button.addEventListener('click', () => setDriver(button.dataset.driver as DriverKind));
 }
 
-colorInput.addEventListener('input', () => setUseColor(true));
-clearColorButton.addEventListener('click', () => setUseColor(false));
 cancelButton.addEventListener('click', () => api.postMessage({ type: 'cancel' }));
 testButton.addEventListener('click', test);
 form.addEventListener('submit', (event) => {
@@ -69,12 +60,6 @@ function applyInit(isEdit: boolean, connection: Partial<ConnectionConfig>): void
   databaseInput.value = connection.database ?? '';
   passwordInput.value = '';
   passwordInput.placeholder = isEdit ? 'leave blank to keep current' : '';
-  if (connection.color) {
-    colorInput.value = connection.color;
-    setUseColor(true);
-  } else {
-    setUseColor(!isEdit);
-  }
 }
 
 function readConnection(): ConnectionConfig {
@@ -85,8 +70,7 @@ function readConnection(): ConnectionConfig {
     port: portInput.value ? Number(portInput.value) : undefined,
     user: userInput.value.trim(),
     database: databaseInput.value.trim() || undefined,
-    color: useColor ? colorInput.value : undefined,
-    icon: iconInput.value.trim() || undefined,
+    icon: iconInput.value || undefined,
   };
 }
 
@@ -105,12 +89,6 @@ function showResult(state: 'ok' | 'error' | 'pending', message: string): void {
   result.className = `result ${state}`;
 }
 
-function setUseColor(next: boolean): void {
-  useColor = next;
-  colorInput.style.opacity = next ? '1' : '0.35';
-  clearColorButton.classList.toggle('active', !next);
-}
-
 function setDriver(driver: DriverKind): void {
   selectedDriver = driver;
   for (const button of driverPicker.querySelectorAll<HTMLButtonElement>('.driver-option')) {
@@ -118,21 +96,6 @@ function setDriver(driver: DriverKind): void {
   }
   if (portInput.value === '') {
     portInput.value = DEFAULT_PORTS[driver];
-  }
-}
-
-function buildSwatches(): void {
-  for (const color of SWATCHES) {
-    const swatch = document.createElement('button');
-    swatch.type = 'button';
-    swatch.className = 'swatch';
-    swatch.style.background = color;
-    swatch.title = color;
-    swatch.addEventListener('click', () => {
-      colorInput.value = color;
-      setUseColor(true);
-    });
-    swatches.appendChild(swatch);
   }
 }
 

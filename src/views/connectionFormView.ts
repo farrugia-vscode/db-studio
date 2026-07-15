@@ -5,7 +5,7 @@ import type { ExtensionToForm, FormToExtension } from '../domain/formProtocol';
 
 /**
  * Webview form to add or edit a connection in one screen (name, driver, host,
- * port, user, database, password, color). In edit mode the password field may
+ * port, user, database, password, color emoji). In edit mode the password field may
  * be left blank to keep the stored one.
  */
 export class ConnectionFormView {
@@ -125,7 +125,20 @@ export class ConnectionFormView {
   <form id="form" autocomplete="off">
     <div class="row">
       <label class="grow">Name<input id="name" required></label>
-      <label class="icon-field">Icon<input id="icon" maxlength="4" placeholder="🚀"></label>
+      <label class="icon-field">Color
+        <select id="icon" aria-label="Connection color">
+          <option value="">—</option>
+          <option value="🔴">🔴</option>
+          <option value="🟠">🟠</option>
+          <option value="🟡">🟡</option>
+          <option value="🟢">🟢</option>
+          <option value="🔵">🔵</option>
+          <option value="🟣">🟣</option>
+          <option value="🟤">🟤</option>
+          <option value="⚫">⚫</option>
+          <option value="⚪">⚪</option>
+        </select>
+      </label>
     </div>
     <label>Driver
       <div class="driver-picker" id="driverPicker">
@@ -140,13 +153,6 @@ export class ConnectionFormView {
     <label>User<input id="user" required></label>
     <label>Database<input id="database" placeholder="optional (required for PostgreSQL)"></label>
     <label>Password<input id="password" type="password"></label>
-    <label>Color
-      <span class="color-row">
-        <input id="color" type="color" value="#4ec94e">
-        <span id="swatches"></span>
-        <button type="button" id="clearColor">No color</button>
-      </span>
-    </label>
     <div id="result" class="result"></div>
     <div class="actions">
       <button type="button" id="test">Test</button>

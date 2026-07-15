@@ -44,14 +44,14 @@ export class SqlConsoleView {
     message: ConsoleToExtension,
   ): Promise<void> {
     if (message.type === 'ready') {
-      const sql = this.context.globalState.get<string>(STORAGE_PREFIX + connectionName, '');
+      const sql = this.context.workspaceState.get<string>(STORAGE_PREFIX + connectionName, '');
       this.post(panel, { type: 'init', sql });
       this.post(panel, { type: 'history', items: this.loadHistory(connectionName) });
       void this.sendSchema(connectionName, panel);
       return;
     }
     if (message.type === 'save') {
-      await this.context.globalState.update(STORAGE_PREFIX + connectionName, message.sql);
+      await this.context.workspaceState.update(STORAGE_PREFIX + connectionName, message.sql);
       return;
     }
     if (message.type === 'run') {
@@ -84,7 +84,7 @@ export class SqlConsoleView {
   }
 
   private loadHistory(connectionName: string): string[] {
-    return this.context.globalState.get<string[]>(HISTORY_PREFIX + connectionName, []);
+    return this.context.workspaceState.get<string[]>(HISTORY_PREFIX + connectionName, []);
   }
 
   /** Prepend a successfully run query to the connection's history (newest first, deduped). */
@@ -96,7 +96,7 @@ export class SqlConsoleView {
     const history = this.loadHistory(connectionName).filter((entry) => entry !== trimmed);
     history.unshift(trimmed);
     const capped = history.slice(0, MAX_HISTORY);
-    await this.context.globalState.update(HISTORY_PREFIX + connectionName, capped);
+    await this.context.workspaceState.update(HISTORY_PREFIX + connectionName, capped);
     this.post(panel, { type: 'history', items: capped });
   }
 

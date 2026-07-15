@@ -8,7 +8,7 @@ import type { QueryResult } from '../domain/types';
 export class ResultsView {
   private panel: vscode.WebviewPanel | null = null;
 
-  show(title: string, result: QueryResult, color?: string): void {
+  show(title: string, result: QueryResult): void {
     if (!this.panel) {
       this.panel = vscode.window.createWebviewPanel('dbStudio.results', title, vscode.ViewColumn.Active, {
         enableScripts: false,
@@ -19,13 +19,13 @@ export class ResultsView {
       });
     }
     this.panel.title = title;
-    this.panel.webview.html = this.renderHtml(result, color);
+    this.panel.webview.html = this.renderHtml(result);
     this.panel.reveal();
   }
 
-  private renderHtml(result: QueryResult, color?: string): string {
+  private renderHtml(result: QueryResult): string {
     if (result.columns.length === 0) {
-      return this.wrap(`<div class="summary">Query OK · ${result.affectedRows ?? 0} row(s) affected.</div>`, color);
+      return this.wrap(`<div class="summary">Query OK · ${result.affectedRows ?? 0} row(s) affected.</div>`);
     }
     const head = result.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('');
     const body = result.rows
@@ -35,18 +35,16 @@ export class ResultsView {
       })
       .join('');
     const table = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
-    return this.wrap(`<div class="summary">${result.rows.length} row(s)</div>${table}`, color);
+    return this.wrap(`<div class="summary">${result.rows.length} row(s)</div>${table}`);
   }
 
-  private wrap(inner: string, color?: string): string {
-    const vars = color ? `--conn:${escapeHtml(color)};` : '';
-    const tinted = color ? ' class="tinted"' : '';
+  private wrap(inner: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
-  :root { --conn: transparent; --cell-px: 12px; --cell-py: 7px; }
+  :root { --cell-px: 12px; --cell-py: 7px; }
   html, body { height: 100%; }
   body { margin: 0; display: flex; flex-direction: column; font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); }
   .summary { color: var(--vscode-descriptionForeground); font-size: 12px; padding: 10px 16px; }
@@ -65,7 +63,7 @@ export class ResultsView {
   tbody tr:hover td { background: var(--vscode-list-hoverBackground); }
 </style>
 </head>
-<body${tinted} style="${vars}">${inner}</body>
+<body>${inner}</body>
 </html>`;
   }
 }

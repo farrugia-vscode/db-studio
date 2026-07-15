@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import type { SchemaObjectKind } from '../domain/types';
-import { ConnectionIconProvider } from './connectionIconProvider';
 import { GroupKind, SchemaNode } from './schemaNode';
 
 const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
 const None = vscode.TreeItemCollapsibleState.None;
 export const VISIBLE_PREFIX = 'dbStudio.visibleNamespaces.';
+/** Names of connections to show in the tree (empty/unset = show all). */
+export const VISIBLE_CONNECTIONS_KEY = 'dbStudio.visibleConnections';
 
 /**
  * Lazily builds the schema tree: connection → namespace → table → column.
@@ -18,7 +19,6 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
 
   constructor(
     private readonly manager: ConnectionManager,
-    private readonly icons: ConnectionIconProvider,
     private readonly context: vscode.ExtensionContext,
   ) {}
 
@@ -46,14 +46,18 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     return Promise.resolve([]);
   }
 
-  private async buildConnectionNodes(): Promise<SchemaNode[]> {
-    const connections = this.manager.getConnections();
-    return Promise.all(
-      connections.map(async (connection) => {
+  private buildConnectionNodes(): Promise<SchemaNode[]> {
+    // An empty/unset visibility list means "show all".
+    const visible = this.context.workspaceState.get<string[]>(VISIBLE_CONNECTIONS_KEY, []);
+    const connections = this.manager
+      .getConnections()
+      .filter((connection) => visible.length === 0 || visible.includes(connection.name));
+    return Promise.resolve(
+      connections.map((connection) => {
         const label = connection.icon ? `${connection.icon} ${connection.name}` : connection.name;
         const node = new SchemaNode('connection', label, Collapsed, connection.name);
         node.description = `${connection.driver} · ${connection.host}`;
-        node.iconPath = await this.icons.connectionIcon(connection.color);
+        node.iconPath = new vscode.ThemeIcon('database');
         return node;
       }),
     );
@@ -63,7 +67,7 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     const driver = await this.manager.getDriver(parent.connectionName);
     const all = await driver.listNamespaces();
     // An empty/unset visibility list means "show all".
-    const visible = this.context.globalState.get<string[]>(VISIBLE_PREFIX + parent.connectionName, []);
+    const visible = this.context.workspaceState.get<string[]>(VISIBLE_PREFIX + parent.connectionName, []);
     const namespaces = visible.length > 0 ? all.filter((namespace) => visible.includes(namespace)) : all;
     return namespaces.map((namespace) => {
       const node = new SchemaNode('namespace', namespace, Collapsed, parent.connectionName, namespace);

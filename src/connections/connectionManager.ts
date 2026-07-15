@@ -4,11 +4,17 @@ import type { ConnectionConfig } from '../domain/types';
 import { DriverFactory } from '../drivers/driverFactory';
 
 const SECRET_PREFIX = 'dbStudio.password.';
+const GLOBAL_CLEARED_KEY = 'dbStudio.globalConnectionsCleared';
 
 /**
  * Owns connection configuration, secret passwords and live driver instances.
  * One driver is cached per connection name. Driver creation is delegated to
  * {@link DriverFactory} (DIP) so this class knows nothing about engines.
+ *
+ * Connections are scoped to the open folder/workspace: config is read from and
+ * written to the workspace settings (`.vscode/settings.json`), and secrets are
+ * keyed by workspace so identically named connections in different projects
+ * never collide. With no folder open, everything falls back to global scope.
  */
 export class ConnectionManager {
   private readonly drivers = new Map<string, DatabaseDriver>();
@@ -18,8 +24,29 @@ export class ConnectionManager {
     private readonly driverFactory: DriverFactory,
   ) {}
 
+  private get isWorkspaceOpen(): boolean {
+    return (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
+  }
+
+  /** Stable identifier of the open workspace, used to namespace secrets. */
+  private get workspaceScope(): string {
+    return (
+      vscode.workspace.workspaceFile?.fsPath ??
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+      ''
+    );
+  }
+
+  private secretKey(name: string): string {
+    const scope = this.workspaceScope;
+    return scope ? `${SECRET_PREFIX}${scope}::${name}` : `${SECRET_PREFIX}${name}`;
+  }
+
   getConnections(): ConnectionConfig[] {
-    return vscode.workspace.getConfiguration('dbStudio').get<ConnectionConfig[]>('connections', []);
+    const inspected = vscode.workspace
+      .getConfiguration('dbStudio')
+      .inspect<ConnectionConfig[]>('connections');
+    return (this.isWorkspaceOpen ? inspected?.workspaceValue : inspected?.globalValue) ?? [];
   }
 
   getConnection(name: string): ConnectionConfig | undefined {
@@ -32,7 +59,7 @@ export class ConnectionManager {
     connections.push(config);
     await this.writeConnections(connections);
     if (password !== undefined) {
-      await this.context.secrets.store(SECRET_PREFIX + config.name, password);
+      await this.context.secrets.store(this.secretKey(config.name), password);
     }
     // Drop any cached driver so the new host/credentials take effect on next use.
     await this.closeDriver(config.name);
@@ -43,7 +70,7 @@ export class ConnectionManager {
    * password when `password` is undefined) and drops the old entry + secret.
    */
   async renameConnection(oldName: string, config: ConnectionConfig, password?: string): Promise<void> {
-    const resolved = password ?? (await this.context.secrets.get(SECRET_PREFIX + oldName)) ?? '';
+    const resolved = password ?? (await this.context.secrets.get(this.secretKey(oldName))) ?? '';
     await this.saveConnection(config, resolved);
     if (oldName !== config.name) {
       await this.removeConnection(oldName);
@@ -57,7 +84,7 @@ export class ConnectionManager {
       return undefined;
     }
     const newName = this.uniqueName(`${name} copy`);
-    const password = (await this.context.secrets.get(SECRET_PREFIX + name)) ?? '';
+    const password = (await this.context.secrets.get(this.secretKey(name))) ?? '';
     await this.saveConnection({ ...source, name: newName }, password);
     return newName;
   }
@@ -77,7 +104,7 @@ export class ConnectionManager {
   async removeConnection(name: string): Promise<void> {
     const connections = this.getConnections().filter((connection) => connection.name !== name);
     await this.writeConnections(connections);
-    await this.context.secrets.delete(SECRET_PREFIX + name);
+    await this.context.secrets.delete(this.secretKey(name));
     await this.closeDriver(name);
   }
 
@@ -87,7 +114,7 @@ export class ConnectionManager {
    * with the driver error, or a timeout, when the connection cannot be opened.
    */
   async testConnection(config: ConnectionConfig, password?: string): Promise<void> {
-    const resolved = password ?? (await this.context.secrets.get(SECRET_PREFIX + config.name)) ?? '';
+    const resolved = password ?? (await this.context.secrets.get(this.secretKey(config.name))) ?? '';
     const driver = this.driverFactory.make(config, resolved);
     try {
       await withTimeout(driver.connect(), 8000, 'Connection timed out after 8s');
@@ -105,7 +132,7 @@ export class ConnectionManager {
     if (!config) {
       throw new Error(`Unknown connection: ${name}`);
     }
-    const password = (await this.context.secrets.get(SECRET_PREFIX + name)) ?? '';
+    const password = (await this.context.secrets.get(this.secretKey(name))) ?? '';
     const driver = this.driverFactory.make(config, password);
     this.drivers.set(name, driver);
     return driver;
@@ -127,9 +154,30 @@ export class ConnectionManager {
   }
 
   private writeConnections(connections: ConnectionConfig[]): Thenable<void> {
-    return vscode.workspace
-      .getConfiguration('dbStudio')
-      .update('connections', connections, vscode.ConfigurationTarget.Global);
+    const target = this.isWorkspaceOpen
+      ? vscode.ConfigurationTarget.Workspace
+      : vscode.ConfigurationTarget.Global;
+    return vscode.workspace.getConfiguration('dbStudio').update('connections', connections, target);
+  }
+
+  /**
+   * One-shot cleanup: connections are now scoped per workspace, so any leftover
+   * global connections (and their unscoped secrets) are removed. Runs at most
+   * once (guarded by a flag) so it never wipes the no-folder global fallback.
+   */
+  async clearGlobalConnections(): Promise<void> {
+    if (this.context.globalState.get<boolean>(GLOBAL_CLEARED_KEY, false)) {
+      return;
+    }
+    const config = vscode.workspace.getConfiguration('dbStudio');
+    const global = config.inspect<ConnectionConfig[]>('connections')?.globalValue ?? [];
+    for (const connection of global) {
+      await this.context.secrets.delete(SECRET_PREFIX + connection.name);
+    }
+    if (global.length > 0) {
+      await config.update('connections', undefined, vscode.ConfigurationTarget.Global);
+    }
+    await this.context.globalState.update(GLOBAL_CLEARED_KEY, true);
   }
 }
 

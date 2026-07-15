@@ -8,8 +8,6 @@ export interface GridDataMessage {
   columns: ColumnMeta[];
   pkColumns: string[];
   rows: Row[];
-  /** The owning connection's color, tinting the grid window. */
-  color?: string;
   /** Pagination: total matching rows, current window start and page size. */
   total: number;
   offset: number;
@@ -26,13 +24,7 @@ export interface GridErrorMessage {
   message: string;
 }
 
-/** Live re-tint when the owning connection's color changes. */
-export interface GridColorMessage {
-  type: 'color';
-  color?: string;
-}
-
-export type ExtensionToWebview = GridDataMessage | GridErrorMessage | GridColorMessage;
+export type ExtensionToWebview = GridDataMessage | GridErrorMessage;
 
 /** Messages sent from the grid webview back to the extension host. */
 export interface ReadyMessage {

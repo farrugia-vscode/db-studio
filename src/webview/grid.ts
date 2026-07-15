@@ -1,7 +1,6 @@
 import type { ExtensionToWebview, WebviewToExtension } from '../domain/gridProtocol';
 import type { ColumnMeta, Row } from '../domain/types';
 import type { EditDto } from '../domain/edits/edit';
-import { titleForeground } from '../domain/color';
 
 interface VsCodeApi {
   postMessage(message: WebviewToExtension): void;
@@ -336,7 +335,6 @@ jsonModalText.addEventListener('keydown', onJsonKeydown);
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
   if (message.type === 'data') {
-    applyColor(message.color);
     total = message.total;
     offset = message.offset;
     pageSize = message.pageSize;
@@ -347,10 +345,6 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
     updatePager();
     return;
   }
-  if (message.type === 'color') {
-    applyColor(message.color);
-    return;
-  }
   if (message.type === 'error') {
     notice.textContent = message.message;
     notice.classList.add('error');
@@ -358,12 +352,6 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
 });
 
 api.postMessage({ type: 'ready' });
-
-function applyColor(color?: string): void {
-  document.documentElement.style.setProperty('--conn', color ?? 'transparent');
-  document.documentElement.style.setProperty('--title-fg', color ? titleForeground(color) : '#fff');
-  document.body.classList.toggle('tinted', Boolean(color));
-}
 
 function goToOffset(next: number): void {
   api.postMessage({ type: 'page', offset: Math.max(0, Math.min(next, lastOffset())), pageSize });
