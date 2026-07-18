@@ -6,6 +6,7 @@ import type {
   ConnectionConfig,
   ForeignKeyDraft,
   ForeignKeyMeta,
+  IncomingForeignKey,
   IndexMeta,
   QueryResult,
   RoutineMeta,
@@ -291,6 +292,39 @@ export class PostgresDriver implements DatabaseDriver {
     }));
   }
 
+  async listIncomingForeignKeys(namespace: string, table: string): Promise<IncomingForeignKey[]> {
+    await this.connect();
+    const result = await this.client!.query<{
+      name: string;
+      ns: string;
+      tbl: string;
+      columns: string[];
+      refcolumns: string[];
+    }>(
+      `SELECT con.conname AS name, n.nspname AS ns, t.relname AS tbl,
+              (SELECT array_agg(att.attname ORDER BY k.ord)
+               FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+               JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = k.attnum) AS columns,
+              (SELECT array_agg(att.attname ORDER BY k.ord)
+               FROM unnest(con.confkey) WITH ORDINALITY AS k(attnum, ord)
+               JOIN pg_attribute att ON att.attrelid = con.confrelid AND att.attnum = k.attnum) AS refcolumns
+       FROM pg_constraint con
+       JOIN pg_class t ON t.oid = con.conrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       JOIN pg_class rt ON rt.oid = con.confrelid
+       JOIN pg_namespace rn ON rn.oid = rt.relnamespace
+       WHERE con.contype = 'f' AND rn.nspname = $1 AND rt.relname = $2`,
+      [namespace, table],
+    );
+    return result.rows.map((row) => ({
+      name: row.name,
+      namespace: row.ns,
+      table: row.tbl,
+      columns: row.columns,
+      refColumns: row.refcolumns,
+    }));
+  }
+
   buildCreateTable(namespace: string, table: string, design: TableDesign): string[] {
     const ref = this.buildTableRef(namespace, table);
     const active = design.columns.filter((column) => !column.drop && column.name.trim() !== '');
@@ -437,5 +471,23 @@ export class PostgresDriver implements DatabaseDriver {
     await this.connect();
     const result = await this.client!.query(sql, params);
     return result.rowCount ?? 0;
+  }
+
+  async beginTransaction(): Promise<void> {
+    await this.connect();
+    await this.client!.query('BEGIN');
+  }
+
+  async commitTransaction(): Promise<void> {
+    await this.client!.query('COMMIT');
+  }
+
+  async rollbackTransaction(): Promise<void> {
+    await this.client!.query('ROLLBACK');
+  }
+
+  async useNamespace(namespace: string): Promise<void> {
+    await this.connect();
+    await this.client!.query(`SET search_path TO ${this.quoteIdentifier(namespace)}`);
   }
 }

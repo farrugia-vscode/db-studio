@@ -1,22 +1,28 @@
-import type { ColumnMeta, Row } from './types';
+import type { ColumnMeta, ForeignKeyMeta, IncomingForeignKey, Row } from './types';
 import type { EditDto } from './edits/edit';
 
 /** Messages sent from the extension host to the grid webview. */
 export interface GridDataMessage {
   type: 'data';
+  namespace: string;
   table: string;
   columns: ColumnMeta[];
   pkColumns: string[];
+  /** Foreign keys defined on this table (for the value dropdown and forward navigation). */
+  foreignKeys: ForeignKeyMeta[];
+  /** Foreign keys in other tables that point here (for reverse navigation). */
+  incomingForeignKeys: IncomingForeignKey[];
   rows: Row[];
   /** Pagination: total matching rows, current window start and page size. */
   total: number;
   offset: number;
   pageSize: number;
+  /** The active WHERE condition, so the filter box reflects a navigation. */
+  filter: string;
+  /** The active ORDER BY clause (without the keyword); empty = unsorted. */
+  orderBy: string;
   /** Locale for displaying date columns (empty = raw ISO). */
   dateLocale: string;
-  /** Current server-side sort (empty column = unsorted). */
-  orderColumn: string;
-  orderDir: 'ASC' | 'DESC';
 }
 
 export interface GridErrorMessage {
@@ -24,7 +30,14 @@ export interface GridErrorMessage {
   message: string;
 }
 
-export type ExtensionToWebview = GridDataMessage | GridErrorMessage;
+/** Distinct values of a referenced column, returned for an FK dropdown. */
+export interface FkValuesResultMessage {
+  type: 'fkValuesResult';
+  requestId: number;
+  values: string[];
+}
+
+export type ExtensionToWebview = GridDataMessage | GridErrorMessage | FkValuesResultMessage;
 
 /** Messages sent from the grid webview back to the extension host. */
 export interface ReadyMessage {
@@ -53,14 +66,20 @@ export interface PageMessage {
   pageSize: number;
 }
 
-/** Sort by a column server-side (empty column clears the sort). */
+/** Sort by a column server-side from a header click (empty column clears the sort). */
 export interface SortMessage {
   type: 'sort';
   column: string;
   direction: 'ASC' | 'DESC';
 }
 
-export type CopyFormat = 'json' | 'csv' | 'tsv' | 'insert';
+/** Set a raw ORDER BY clause (without the keyword) typed in the order-by box. */
+export interface OrderMessage {
+  type: 'order';
+  orderBy: string;
+}
+
+export type CopyFormat = 'markdown' | 'insert' | 'csv' | 'html' | 'xml' | 'json';
 
 /** Copy a selected cell range to the clipboard in the chosen format. */
 export interface CopyMessage {
@@ -70,6 +89,31 @@ export interface CopyMessage {
   rows: Array<Array<string | null>>;
 }
 
+/** Export the selection (or all rows) to a file in the chosen format. */
+export interface ExportMessage {
+  type: 'export';
+  format: CopyFormat;
+  columns: string[];
+  rows: Array<Array<string | null>>;
+}
+
+/** Load the first values of a referenced column to populate an FK cell dropdown. */
+export interface FkValuesMessage {
+  type: 'fkValues';
+  requestId: number;
+  refTable: string;
+  refColumn: string;
+}
+
+/** Open another table filtered to `columns = values` (foreign-key navigation). */
+export interface OpenRelatedMessage {
+  type: 'openRelated';
+  namespace: string;
+  table: string;
+  columns: string[];
+  values: Array<string | null>;
+}
+
 export type WebviewToExtension =
   | ReadyMessage
   | ReloadMessage
@@ -77,4 +121,8 @@ export type WebviewToExtension =
   | FilterMessage
   | PageMessage
   | SortMessage
-  | CopyMessage;
+  | OrderMessage
+  | CopyMessage
+  | ExportMessage
+  | FkValuesMessage
+  | OpenRelatedMessage;

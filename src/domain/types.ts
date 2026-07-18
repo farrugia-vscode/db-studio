@@ -51,6 +51,18 @@ export interface ForeignKeyMeta {
   onDelete: string;
 }
 
+/** A foreign key in another table that points at this table (for reverse navigation). */
+export interface IncomingForeignKey {
+  name: string;
+  namespace: string;
+  /** The referencing table. */
+  table: string;
+  /** Columns in the referencing table. */
+  columns: string[];
+  /** Columns in this (referenced) table those point at. */
+  refColumns: string[];
+}
+
 /** An index as edited in the designer. */
 export interface IndexDraft {
   originalName: string | null;

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
-import type { SchemaObjectKind } from '../domain/types';
-import { GroupKind, SchemaNode } from './schemaNode';
+import type { ColumnMeta, ForeignKeyMeta, SchemaObjectKind } from '../domain/types';
+import { GroupKind, SchemaNode, TablePartKind } from './schemaNode';
 
 const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
 const None = vscode.TreeItemCollapsibleState.None;
@@ -42,6 +42,12 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     }
     if (node.kind === 'group') {
       return this.buildObjectNodes(node);
+    }
+    if (node.kind === 'table') {
+      return this.buildTablePartNodes(node);
+    }
+    if (node.kind === 'tablePart') {
+      return this.buildFieldNodes(node);
     }
     return Promise.resolve([]);
   }
@@ -90,8 +96,12 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     const procedures = routines.filter((routine) => routine.kind === 'procedure').length;
     const functions = routines.filter((routine) => routine.kind === 'function').length;
 
+    // Expandable tables reveal their structure, but VS Code then toggles them on double-click too.
+    // Users who only want a double-click to open the data can turn the structure off.
+    const showStructure = vscode.workspace.getConfiguration('dbStudio').get<boolean>('showTableStructure', true);
+    const tableState = showStructure ? Collapsed : None;
     const nodes = tables.map((table) => {
-      const node = new SchemaNode('table', table, Collapsed, parent.connectionName, namespace, table);
+      const node = new SchemaNode('table', table, tableState, parent.connectionName, namespace, table);
       node.iconPath = new vscode.ThemeIcon('table');
       // Open the data grid when the table row is activated (honors the user's single/double-click mode).
       node.command = { command: 'dbStudio.openTableData', title: 'Open Table Data', arguments: [node] };
@@ -132,6 +142,107 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     });
   }
 
+  /** The PHPStorm-style folders under a table: Columns, Keys, Foreign keys, Indexes. */
+  private async buildTablePartNodes(parent: SchemaNode): Promise<SchemaNode[]> {
+    const driver = await this.manager.getDriver(parent.connectionName);
+    const namespace = parent.namespace!;
+    const table = parent.table!;
+    const [columns, foreignKeys, indexes] = await Promise.all([
+      driver.listColumns(namespace, table),
+      driver.listForeignKeys(namespace, table),
+      driver.listIndexes(namespace, table),
+    ]);
+    // Keys = the primary key plus every unique index; indexes list the primary key too.
+    const hasPrimaryKey = columns.some((column) => column.isPrimaryKey);
+    const uniqueIndexes = indexes.filter((index) => index.isUnique).length;
+    const primaryCount = hasPrimaryKey ? 1 : 0;
+
+    const nodes: SchemaNode[] = [];
+    this.pushTablePart(nodes, parent, 'columns', columns.length);
+    this.pushTablePart(nodes, parent, 'keys', primaryCount + uniqueIndexes);
+    this.pushTablePart(nodes, parent, 'foreignKeys', foreignKeys.length);
+    this.pushTablePart(nodes, parent, 'indexes', primaryCount + indexes.length);
+    return nodes;
+  }
+
+  private pushTablePart(nodes: SchemaNode[], parent: SchemaNode, tablePartKind: TablePartKind, count: number): void {
+    // Columns always show; the other folders only when the table has that kind of metadata.
+    if (count === 0 && tablePartKind !== 'columns') {
+      return;
+    }
+    const node = new SchemaNode(
+      'tablePart',
+      TABLE_PART_LABELS[tablePartKind],
+      Collapsed,
+      parent.connectionName,
+      parent.namespace,
+      parent.table,
+      undefined,
+      undefined,
+      tablePartKind,
+    );
+    node.description = String(count);
+    node.iconPath = new vscode.ThemeIcon('folder');
+    nodes.push(node);
+  }
+
+  private async buildFieldNodes(parent: SchemaNode): Promise<SchemaNode[]> {
+    const driver = await this.manager.getDriver(parent.connectionName);
+    const namespace = parent.namespace!;
+    const table = parent.table!;
+    if (parent.tablePartKind === 'columns') {
+      const [columns, foreignKeys] = await Promise.all([
+        driver.listColumns(namespace, table),
+        driver.listForeignKeys(namespace, table),
+      ]);
+      const fkColumns = new Set(foreignKeys.flatMap((fk) => fk.columns));
+      return columns.map((column) => this.buildFieldNode(parent, column.name, describeColumn(column), columnIcon(column, fkColumns)));
+    }
+    if (parent.tablePartKind === 'keys') {
+      const [columns, indexes] = await Promise.all([
+        driver.listColumns(namespace, table),
+        driver.listIndexes(namespace, table),
+      ]);
+      const nodes = this.primaryKeyNode(parent, columns, false);
+      for (const index of indexes.filter((index) => index.isUnique)) {
+        nodes.push(this.buildFieldNode(parent, index.name, `(${index.columns.join(', ')})`, 'key'));
+      }
+      return nodes;
+    }
+    if (parent.tablePartKind === 'foreignKeys') {
+      const foreignKeys = await driver.listForeignKeys(namespace, table);
+      return foreignKeys.map((fk) => this.buildFieldNode(parent, fk.name, describeForeignKey(fk), 'references'));
+    }
+    const [columns, indexes] = await Promise.all([
+      driver.listColumns(namespace, table),
+      driver.listIndexes(namespace, table),
+    ]);
+    const nodes = this.primaryKeyNode(parent, columns, true);
+    for (const index of indexes) {
+      const suffix = index.isUnique ? ' UNIQUE' : '';
+      nodes.push(this.buildFieldNode(parent, index.name, `(${index.columns.join(', ')})${suffix}`, 'list-selection'));
+    }
+    return nodes;
+  }
+
+  /** The synthetic PRIMARY entry shared by the Keys and Indexes folders (indexes mark it UNIQUE). */
+  private primaryKeyNode(parent: SchemaNode, columns: ColumnMeta[], asIndex: boolean): SchemaNode[] {
+    const pkColumns = columns.filter((column) => column.isPrimaryKey).map((column) => column.name);
+    if (pkColumns.length === 0) {
+      return [];
+    }
+    const suffix = asIndex ? ' UNIQUE' : '';
+    return [this.buildFieldNode(parent, 'PRIMARY', `(${pkColumns.join(', ')})${suffix}`, 'key')];
+  }
+
+  private buildFieldNode(parent: SchemaNode, label: string, description: string, icon: string): SchemaNode {
+    const node = new SchemaNode('field', label, None, parent.connectionName, parent.namespace, parent.table);
+    node.description = description;
+    node.tooltip = `${label}  ${description}`;
+    node.iconPath = new vscode.ThemeIcon(icon);
+    return node;
+  }
+
   private async listGroupObjects(
     driver: Awaited<ReturnType<ConnectionManager['getDriver']>>,
     namespace: string,
@@ -159,6 +270,32 @@ const GROUP_LABELS: Record<GroupKind, string> = {
   triggers: 'Triggers',
   sequences: 'Sequences',
 };
+
+const TABLE_PART_LABELS: Record<TablePartKind, string> = {
+  columns: 'Columns',
+  keys: 'Keys',
+  foreignKeys: 'Foreign keys',
+  indexes: 'Indexes',
+};
+
+function describeColumn(column: ColumnMeta): string {
+  return column.isAutoIncrement ? `${column.type} (auto increment)` : column.type;
+}
+
+/** Gold key on the primary key, a link glyph on foreign-key columns, a plain field otherwise. */
+function columnIcon(column: ColumnMeta, fkColumns: Set<string>): string {
+  if (column.isPrimaryKey) {
+    return 'key';
+  }
+  if (fkColumns.has(column.name)) {
+    return 'references';
+  }
+  return 'symbol-field';
+}
+
+function describeForeignKey(fk: ForeignKeyMeta): string {
+  return `(${fk.columns.join(', ')}) → ${fk.refTable} (${fk.refColumns.join(', ')})`;
+}
 
 const GROUP_OBJECT_KIND: Record<GroupKind, SchemaObjectKind> = {
   views: 'view',

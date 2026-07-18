@@ -8,6 +8,7 @@ import type {
   ConnectionConfig,
   ForeignKeyDraft,
   ForeignKeyMeta,
+  IncomingForeignKey,
   IndexMeta,
   QueryResult,
   RoutineMeta,
@@ -200,6 +201,28 @@ export class MysqlDriver implements DatabaseDriver {
     return [...byName.values()];
   }
 
+  async listIncomingForeignKeys(namespace: string, table: string): Promise<IncomingForeignKey[]> {
+    const rows = await this.select(
+      `SELECT kcu.constraint_name AS name, kcu.table_schema AS ns, kcu.table_name AS tbl,
+              kcu.column_name AS col, kcu.referenced_column_name AS refcol
+       FROM information_schema.key_column_usage kcu
+       WHERE kcu.referenced_table_schema = ? AND kcu.referenced_table_name = ?
+       ORDER BY kcu.constraint_name, kcu.ordinal_position`,
+      [namespace, table],
+    );
+    const byName = new Map<string, IncomingForeignKey>();
+    for (const row of rows) {
+      const name = String(row.name);
+      if (!byName.has(name)) {
+        byName.set(name, { name, namespace: String(row.ns), table: String(row.tbl), columns: [], refColumns: [] });
+      }
+      const fk = byName.get(name)!;
+      fk.columns.push(String(row.col));
+      fk.refColumns.push(String(row.refcol));
+    }
+    return [...byName.values()];
+  }
+
   buildCreateTable(namespace: string, table: string, design: TableDesign): string[] {
     const active = design.columns.filter((column) => !column.drop && column.name.trim() !== '');
     const lines = active.map((column) => `  ${this.columnDef(column)}`);
@@ -320,6 +343,24 @@ export class MysqlDriver implements DatabaseDriver {
     await this.connect();
     const [result] = await this.connection!.query<ResultSetHeader>(sql, params);
     return result.affectedRows;
+  }
+
+  async beginTransaction(): Promise<void> {
+    await this.connect();
+    await this.connection!.beginTransaction();
+  }
+
+  async commitTransaction(): Promise<void> {
+    await this.connection!.commit();
+  }
+
+  async rollbackTransaction(): Promise<void> {
+    await this.connection!.rollback();
+  }
+
+  async useNamespace(namespace: string): Promise<void> {
+    await this.connect();
+    await this.connection!.query(`USE ${this.quoteIdentifier(namespace)}`);
   }
 
   private async select(sql: string, params: unknown[] = []): Promise<RowDataPacket[]> {

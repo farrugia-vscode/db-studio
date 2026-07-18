@@ -1,6 +1,7 @@
 import type {
   ColumnMeta,
   ForeignKeyMeta,
+  IncomingForeignKey,
   IndexMeta,
   QueryResult,
   RoutineMeta,
@@ -27,6 +28,8 @@ export interface SchemaIntrospector {
   listColumns(namespace: string, table: string): Promise<ColumnMeta[]>;
   listIndexes(namespace: string, table: string): Promise<IndexMeta[]>;
   listForeignKeys(namespace: string, table: string): Promise<ForeignKeyMeta[]>;
+  /** Foreign keys in other tables that reference this table (reverse of {@link listForeignKeys}). */
+  listIncomingForeignKeys(namespace: string, table: string): Promise<IncomingForeignKey[]>;
   /** The CREATE TABLE statement for a table. */
   getTableDdl(namespace: string, table: string): Promise<string>;
   /** Non-table objects, empty when the engine has none of that kind. */
@@ -41,6 +44,12 @@ export interface SchemaIntrospector {
 export interface StatementExecutor {
   query(sql: string, params?: unknown[]): Promise<QueryResult>;
   runWrite(sql: string, params: unknown[]): Promise<number>;
+  /** Wrap a batch of writes so a failure rolls the whole thing back (same connection). */
+  beginTransaction(): Promise<void>;
+  commitTransaction(): Promise<void>;
+  rollbackTransaction(): Promise<void>;
+  /** Set the active schema/database for subsequent unqualified queries (console schema picker). */
+  useNamespace(namespace: string): Promise<void>;
 }
 
 /** SQL syntax that varies per engine (quoting, placeholder style). */
