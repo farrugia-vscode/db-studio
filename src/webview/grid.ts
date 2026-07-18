@@ -1438,36 +1438,65 @@ function prettyJson(value: string | null): string {
 }
 
 // Live validity: runs on every keystroke, colors the status and gates Save.
+// Validity is a hint, never a block: Save always stays enabled so you can keep editing freely.
 function validateJsonModal(): boolean {
   const text = jsonModalText.value.trim();
+  jsonModalSave.disabled = false;
   if (text === '') {
     jsonStatus.textContent = 'empty → NULL';
     jsonStatus.className = 'json-status';
-    jsonModalSave.disabled = false;
     return true;
   }
   try {
     JSON.parse(text);
     jsonStatus.textContent = '● Valid JSON';
     jsonStatus.className = 'json-status ok';
-    jsonModalSave.disabled = false;
     return true;
   } catch (error) {
     jsonStatus.textContent = `● ${(error as Error).message}`;
     jsonStatus.className = 'json-status error';
-    jsonModalSave.disabled = true;
     return false;
   }
 }
 
-// Editor-like behaviour in the JSON textarea: Enter keeps/extends indentation, Tab inserts spaces.
+const JSON_PAIRS: Record<string, string> = { '"': '"', '{': '}', '[': ']' };
+const JSON_CLOSERS = new Set(['"', '}', ']']);
+
+// Editor-like assistance: indent + comma on Enter, spaces on Tab, and auto-closing pairs so the
+// structure stays balanced without you having to type the closing "/}/] yourself.
 function onJsonKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter') {
     event.preventDefault();
     autoIndentNewline();
-  } else if (event.key === 'Tab') {
+    return;
+  }
+  if (event.key === 'Tab') {
     event.preventDefault();
     insertAtCursor('  ');
+    return;
+  }
+  const field = jsonModalText;
+  const start = field.selectionStart;
+  const end = field.selectionEnd;
+  // Type "over" an auto-inserted closer instead of doubling it.
+  if (start === end && JSON_CLOSERS.has(event.key) && field.value[start] === event.key) {
+    event.preventDefault();
+    field.selectionStart = field.selectionEnd = start + 1;
+    return;
+  }
+  // Auto-close an opener; if there is a selection, wrap it.
+  const close = JSON_PAIRS[event.key];
+  if (close !== undefined) {
+    event.preventDefault();
+    const selected = field.value.slice(start, end);
+    field.value = field.value.slice(0, start) + event.key + selected + close + field.value.slice(end);
+    if (selected === '') {
+      field.selectionStart = field.selectionEnd = start + 1;
+    } else {
+      field.selectionStart = start + 1;
+      field.selectionEnd = start + 1 + selected.length;
+    }
+    validateJsonModal();
   }
 }
 
@@ -1503,19 +1532,28 @@ function replaceSelection(text: string, caret: number): void {
 }
 
 function saveJsonModal(): void {
-  if (!jsonTarget || !validateJsonModal()) {
+  if (!jsonTarget) {
     return;
   }
   pushUndo();
   const text = jsonModalText.value.trim();
   const { model, column, input, cell } = jsonTarget;
-  const next = text === '' ? (column.isNullable ? null : '') : JSON.stringify(JSON.parse(text));
+  const next = text === '' ? (column.isNullable ? null : '') : compactJson(text);
   model.values[column.name] = next;
   input.value = next ?? '';
   input.classList.toggle('null', next === null);
   applyCellState(cell, model, column);
   refreshPending();
   closeJsonModal();
+}
+
+// Valid JSON is stored compact; anything else is saved verbatim (never blocks the save).
+function compactJson(text: string): string {
+  try {
+    return JSON.stringify(JSON.parse(text));
+  } catch {
+    return text;
+  }
 }
 
 function closeJsonModal(): void {
