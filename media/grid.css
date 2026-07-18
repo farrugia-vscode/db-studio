@@ -434,6 +434,35 @@ th.drop-after {
   cursor: grab;
 }
 
+/* ↗ jump affordance on foreign-key / referenced cells. */
+td.has-nav {
+  position: relative;
+}
+
+td.has-nav .nav-btn {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 3px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+td.has-nav:hover .nav-btn {
+  opacity: 0.9;
+}
+
+td.has-nav .nav-btn:hover {
+  opacity: 1;
+}
+
 /* Right-click navigation menu (foreign keys). */
 .cell-menu {
   position: fixed;

@@ -174,6 +174,12 @@ function onGridKeydown(event: KeyboardEvent): void {
   if (editing || !selRect()) {
     return;
   }
+  // Duplicate the selected row(s) as pending inserts (VS Code's Shift+Alt+↓/↑ "copy line").
+  if (event.altKey && event.shiftKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    event.preventDefault();
+    duplicateSelectedRows(event.key === 'ArrowUp');
+    return;
+  }
   // Typing over a selection edits the lead cell; a rectangular selection fills every cell on commit.
   if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault();
@@ -251,6 +257,39 @@ function clearSelectionCells(): void {
   }
   pushUndo();
   applyBulkEdit(rect, '');
+}
+
+// Copy the selected rows as new pending inserts (auto-increment keys cleared so the DB assigns them).
+function duplicateSelectedRows(above: boolean): void {
+  const rect = selRect();
+  if (!rect || !hasPrimaryKey) {
+    return;
+  }
+  pushUndo();
+  const copies: RowModel[] = [];
+  for (let r = rect.r1; r <= rect.r2; r += 1) {
+    const source = rowModels[r];
+    if (!source) {
+      continue;
+    }
+    const values = { ...source.values };
+    for (const column of columns) {
+      if (column.isAutoIncrement) {
+        values[column.name] = null;
+      }
+    }
+    copies.push({ values, original: null, deleted: false });
+  }
+  if (copies.length === 0) {
+    return;
+  }
+  const insertAt = above ? rect.r1 : rect.r2 + 1;
+  rowModels.splice(insertAt, 0, ...copies);
+  render();
+  selAnchor = { r: insertAt, c: rect.c1 };
+  selFocus = { r: insertAt + copies.length - 1, c: rect.c2 };
+  renderSelection();
+  refreshPending();
 }
 
 // Fill every editable cell in `rect` with `raw`, then restore the selection.
@@ -1089,7 +1128,36 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   }
   applyCellState(cell, model, column);
   cell.appendChild(input);
+  maybeAddNavButton(cell, model, column);
   return cell;
+}
+
+// A column is navigable when it is a foreign key (jump to the referenced row) or is itself
+// referenced by a foreign key elsewhere (list the rows pointing here).
+function isNavigableColumn(column: ColumnMeta): boolean {
+  return foreignKeyFor(column.name) !== undefined || incomingForeignKeys.some((fk) => fk.refColumns.includes(column.name));
+}
+
+// A ↗ affordance on FK / referenced cells that opens the navigation menu on a left click.
+function maybeAddNavButton(cell: HTMLTableCellElement, model: RowModel, column: ColumnMeta): void {
+  if (!isNavigableColumn(column)) {
+    return;
+  }
+  cell.classList.add('has-nav');
+  const button = document.createElement('button');
+  button.className = 'nav-btn';
+  button.textContent = '↗';
+  button.title = 'Go to related rows';
+  // Don't let the press start a cell selection.
+  button.addEventListener('mousedown', (event) => event.stopPropagation());
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const actions = cellNavActions(model, column);
+    if (actions.length > 0) {
+      showCellMenu(event.clientX, event.clientY, actions);
+    }
+  });
+  cell.appendChild(button);
 }
 
 function beginInlineEdit(input: HTMLInputElement): void {
