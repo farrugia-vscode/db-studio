@@ -64,6 +64,7 @@
       {
         "command": "dbStudio.runQuery",
         "title": "Run SQL Query",
+        "icon": "$(play)",
         "category": "DB Studio"
       },
       {
@@ -99,6 +100,7 @@
       {
         "command": "dbStudio.createTable",
         "title": "New Table…",
+        "icon": "$(add)",
         "category": "DB Studio"
       },
       {
@@ -212,7 +214,12 @@
         {
           "command": "dbStudio.runQuery",
           "when": "view == dbStudio.explorer && viewItem == namespace",
-          "group": "inline"
+          "group": "inline@1"
+        },
+        {
+          "command": "dbStudio.createTable",
+          "when": "view == dbStudio.explorer && viewItem == namespace",
+          "group": "inline@2"
         },
         {
           "command": "dbStudio.createTable",
