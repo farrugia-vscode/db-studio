@@ -51,6 +51,8 @@ const notice = element<HTMLDivElement>('notice');
 const status = element<HTMLSpanElement>('status');
 const commitButton = element<HTMLButtonElement>('commit');
 const revertButton = element<HTMLButtonElement>('revert');
+const pendingToggle = element<HTMLButtonElement>('pendingToggle');
+const pendingPanel = element<HTMLDivElement>('pendingPanel');
 const reloadButton = element<HTMLButtonElement>('reload');
 const filterInput = element<HTMLInputElement>('filter');
 const orderByInput = element<HTMLInputElement>('orderBy');
@@ -86,6 +88,19 @@ let redoStack: RowModel[][] = [];
 
 commitButton.addEventListener('click', commit);
 revertButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
+pendingToggle.addEventListener('click', (event) => {
+  event.stopPropagation();
+  pendingPanel.hidden = !pendingPanel.hidden;
+  if (!pendingPanel.hidden) {
+    buildPendingPanel();
+  }
+});
+document.addEventListener('mousedown', (event) => {
+  const target = event.target as Node;
+  if (!pendingPanel.hidden && !pendingPanel.contains(target) && target !== pendingToggle) {
+    pendingPanel.hidden = true;
+  }
+});
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 // The 'search' event fires on Enter and when the native clear (×) is clicked.
 filterInput.addEventListener('search', () => api.postMessage({ type: 'filter', value: filterInput.value }));
@@ -1573,11 +1588,56 @@ function appendUpdate(edits: EditDto[], model: RowModel, original: Record<string
 }
 
 function refreshPending(): void {
-  const count = computeEdits().length;
+  const edits = computeEdits();
+  const count = edits.length;
   const dirty = hasLocalChanges();
   commitButton.hidden = count === 0;
   revertButton.hidden = count === 0;
-  status.textContent = count > 0 ? `${count} pending change(s)` : dirty ? 'unsaved changes' : '';
+  pendingToggle.hidden = count === 0;
+  pendingToggle.textContent = `${count} pending ▾`;
+  if (count === 0) {
+    pendingPanel.hidden = true;
+  } else if (!pendingPanel.hidden) {
+    buildPendingPanel();
+  }
+  status.textContent = count === 0 && dirty ? 'unsaved changes' : '';
+}
+
+// A readable list of every change waiting to be committed (grouped by insert / update / delete).
+function buildPendingPanel(): void {
+  const edits = computeEdits();
+  pendingPanel.replaceChildren();
+  if (edits.length === 0) {
+    return;
+  }
+  for (const edit of edits) {
+    const row = document.createElement('div');
+    row.className = `pending-row ${edit.op}`;
+    const tag = document.createElement('span');
+    tag.className = 'pending-op';
+    tag.textContent = edit.op.toUpperCase();
+    const text = document.createElement('span');
+    text.className = 'pending-text';
+    text.textContent = describeEdit(edit);
+    row.append(tag, text);
+    pendingPanel.appendChild(row);
+  }
+}
+
+function describeEdit(edit: EditDto): string {
+  if (edit.op === 'insert') {
+    return formatFields(edit.values);
+  }
+  if (edit.op === 'delete') {
+    return formatFields(edit.pk);
+  }
+  return `${formatFields(edit.pk)}  →  ${formatFields(edit.set)}`;
+}
+
+function formatFields(fields: Row): string {
+  return Object.entries(fields)
+    .map(([key, value]) => `${key}=${value === null ? 'NULL' : String(value)}`)
+    .join(', ');
 }
 
 function hasLocalChanges(): boolean {
