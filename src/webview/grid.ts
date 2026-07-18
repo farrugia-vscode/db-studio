@@ -188,7 +188,12 @@ function onGridMouseMove(event: MouseEvent): void {
 
 function onGridKeydown(event: KeyboardEvent): void {
   const active = document.activeElement;
-  const editing = active instanceof HTMLInputElement && !active.readOnly;
+  // Any real text field owns its keystrokes — a cell being edited, the WHERE/ORDER BY inputs,
+  // the JSON textarea. Only then do the grid's selection shortcuts kick in.
+  const editing =
+    (active instanceof HTMLInputElement && !active.readOnly) ||
+    active instanceof HTMLTextAreaElement ||
+    active instanceof HTMLSelectElement;
   if (event.ctrlKey || event.metaKey) {
     if (editing) {
       return; // editing a cell — let the input handle its own shortcuts (native undo included)
