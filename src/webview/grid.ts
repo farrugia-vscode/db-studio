@@ -1485,6 +1485,33 @@ function onJsonKeydown(event: KeyboardEvent): void {
   }
 }
 
+// The bracket currently enclosing `pos` ('{' object, '[' array, null at top level), ignoring strings.
+function enclosingBracket(value: string, pos: number): '{' | '[' | null {
+  const stack: Array<'{' | '['> = [];
+  let inString = false;
+  for (let i = 0; i < pos; i += 1) {
+    const char = value[i];
+    if (inString) {
+      if (char === '\\') {
+        i += 1;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{' || char === '[') {
+      stack.push(char);
+    } else if (char === '}' || char === ']') {
+      stack.pop();
+    }
+  }
+  return stack.length > 0 ? stack[stack.length - 1] : null;
+}
+
+// Enter scaffolds the next member: a separating comma when needed, then — inside an object —
+// `"": ` with the caret placed between the quotes, ready to type the key. Never blocks typing.
 function autoIndentNewline(): void {
   const value = jsonModalText.value;
   const start = jsonModalText.selectionStart;
@@ -1492,17 +1519,25 @@ function autoIndentNewline(): void {
   const indent = /^[ \t]*/.exec(value.slice(lineStart, start))?.[0] ?? '';
   const opensBlock = value[start - 1] === '{' || value[start - 1] === '[';
   const closesAfter = value[start] === '}' || value[start] === ']';
-  if (opensBlock && closesAfter) {
-    const inner = `${indent}  `;
-    replaceSelection(`\n${inner}\n${indent}`, start + 1 + inner.length);
-    return;
-  }
-  // When the line already holds a complete value, drop the separating comma in for you.
+  const innerIndent = opensBlock ? `${indent}  ` : indent;
+
   const lineBefore = value.slice(lineStart, start).trimEnd();
   const lastChar = lineBefore.slice(-1);
   const needsComma = lineBefore !== '' && !opensBlock && !',:{[('.includes(lastChar);
-  const insert = `${needsComma ? ',' : ''}\n${indent}${opensBlock ? '  ' : ''}`;
-  replaceSelection(insert, start + insert.length);
+  const comma = needsComma ? ',' : '';
+  // When splitting an empty {}/[] pair, drop the closer onto its own line below.
+  const trailer = opensBlock && closesAfter ? `\n${indent}` : '';
+
+  if (enclosingBracket(value, start) === '{') {
+    const insert = `${comma}\n${innerIndent}"": ${trailer}`;
+    // Caret between the two quotes: past comma, newline, indent and the opening quote.
+    const caret = start + comma.length + 1 + innerIndent.length + 1;
+    replaceSelection(insert, caret);
+    return;
+  }
+  const insert = `${comma}\n${innerIndent}${trailer}`;
+  const caret = start + comma.length + 1 + innerIndent.length;
+  replaceSelection(insert, caret);
 }
 
 function insertAtCursor(text: string): void {
