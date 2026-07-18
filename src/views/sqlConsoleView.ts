@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
+import { QueryHistory } from './queryHistory';
 import type { ExtensionToConsole, ConsoleToExtension } from '../domain/consoleProtocol';
 
 const STORAGE_PREFIX = 'dbStudio.console.';
-const HISTORY_PREFIX = 'dbStudio.history.';
 const MAX_AUTOCOMPLETE_TABLES = 300;
-const MAX_HISTORY = 50;
 
 /**
  * A per-connection SQL console: a full editor whose content is auto-saved to
@@ -19,6 +18,7 @@ export class SqlConsoleView {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly manager: ConnectionManager,
+    private readonly history: QueryHistory,
   ) {}
 
   open(connectionName: string, namespace?: string): void {
@@ -79,7 +79,7 @@ export class SqlConsoleView {
     const preselected = this.preselected.get(connectionName);
     const namespace = pickNamespace(namespaces, preselected ?? configured);
     this.post(panel, { type: 'init', sql, namespaces, namespace });
-    this.post(panel, { type: 'history', items: this.loadHistory(connectionName) });
+    this.post(panel, { type: 'history', items: this.history.list(connectionName) });
     void this.sendSchema(connectionName, panel, namespace);
   }
 
@@ -102,7 +102,7 @@ export class SqlConsoleView {
         await driver.useNamespace(namespace);
       }
       const result = await driver.query(sql);
-      await this.pushHistory(connectionName, panel, sql);
+      this.post(panel, { type: 'history', items: await this.history.push(connectionName, sql) });
       this.post(panel, {
         type: 'result',
         columns: result.columns,
@@ -117,23 +117,6 @@ export class SqlConsoleView {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }
-
-  private loadHistory(connectionName: string): string[] {
-    return this.context.workspaceState.get<string[]>(HISTORY_PREFIX + connectionName, []);
-  }
-
-  /** Prepend a successfully run query to the connection's history (newest first, deduped). */
-  private async pushHistory(connectionName: string, panel: vscode.WebviewPanel, sql: string): Promise<void> {
-    const trimmed = sql.trim();
-    if (trimmed === '') {
-      return;
-    }
-    const history = this.loadHistory(connectionName).filter((entry) => entry !== trimmed);
-    history.unshift(trimmed);
-    const capped = history.slice(0, MAX_HISTORY);
-    await this.context.workspaceState.update(HISTORY_PREFIX + connectionName, capped);
-    this.post(panel, { type: 'history', items: capped });
   }
 
   /** Snapshot a schema's tables and columns so the editor can autocomplete. */

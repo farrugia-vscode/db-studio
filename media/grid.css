@@ -57,10 +57,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-contrastBorder, var(--vscode-panel-border));
+  color: var(--vscode-foreground);
+  /* A tint + a foreground-derived border so buttons stay legible in light and dark themes. */
+  background: color-mix(in srgb, var(--vscode-foreground) 7%, var(--vscode-editorWidget-background));
+  border: 1px solid color-mix(in srgb, var(--vscode-foreground) 24%, transparent);
   padding: 0 12px;
+}
+
+.toolbar button:hover {
+  background: color-mix(in srgb, var(--vscode-foreground) 14%, var(--vscode-editorWidget-background));
+  border-color: color-mix(in srgb, var(--vscode-foreground) 42%, transparent);
 }
 
 .toolbar button svg {
@@ -69,12 +75,9 @@ body {
   flex: 0 0 auto;
 }
 
-.toolbar button:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
-}
-
 .toolbar button.primary {
   color: var(--vscode-button-foreground);
+  border-color: transparent;
   background: var(--vscode-button-background);
 }
 
@@ -182,12 +185,12 @@ body {
   height: var(--ctl-h);
   box-sizing: border-box;
   cursor: pointer;
-  border: 1px solid var(--vscode-contrastBorder, var(--vscode-panel-border));
+  border: 1px solid color-mix(in srgb, var(--vscode-foreground) 24%, transparent);
   border-radius: var(--ctl-radius);
   padding: 0 10px;
   font-size: 12px;
   color: var(--vscode-foreground);
-  background: var(--vscode-button-secondaryBackground);
+  background: color-mix(in srgb, var(--vscode-foreground) 7%, var(--vscode-editorWidget-background));
 }
 
 .pending-panel {

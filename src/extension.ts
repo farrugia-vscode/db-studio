@@ -6,6 +6,7 @@ import { ConnectionFormView } from './views/connectionFormView';
 import { DataGridView } from './views/dataGridView';
 import { TableDesignerView } from './views/tableDesignerView';
 import { SqlConsoleView } from './views/sqlConsoleView';
+import { QueryHistory } from './views/queryHistory';
 import { ExportService } from './views/exportService';
 import type { ExportFormat } from './domain/exportFormat';
 import { DDL_SCHEME, DdlContentProvider, buildDdlUri, buildObjectDdlUri } from './views/ddlContentProvider';
@@ -29,9 +30,10 @@ export function activate(context: vscode.ExtensionContext): void {
   formView = new ConnectionFormView(context, manager, () => {
     treeProvider.refresh();
   });
-  dataGridView = new DataGridView(context, manager);
+  const queryHistory = new QueryHistory(context);
+  dataGridView = new DataGridView(context, manager, queryHistory);
   designerView = new TableDesignerView(context, manager, () => treeProvider.refresh());
-  sqlConsoleView = new SqlConsoleView(context, manager);
+  sqlConsoleView = new SqlConsoleView(context, manager, queryHistory);
   exportService = new ExportService(manager);
 
   context.subscriptions.push(
