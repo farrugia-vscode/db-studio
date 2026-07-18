@@ -962,8 +962,10 @@ function measureColumn(index: number, maxWidth: number): number {
       widest = width;
     }
   }
-  // Date columns need extra room for the native field's calendar/spinner controls in edit mode.
-  const extra = isDate ? 34 : 0;
+  // Date columns need room for the native field's calendar/spinner controls in edit mode, so the
+  // full date stays visible; datetime (with seconds) needs the most.
+  const dateType = dateInputType(column.type);
+  const extra = dateType === 'datetime-local' ? 72 : dateType === 'date' ? 44 : 0;
   return Math.min(maxWidth, Math.max(MIN_WIDTH, Math.ceil(widest) + CELL_PADDING + extra));
 }
 

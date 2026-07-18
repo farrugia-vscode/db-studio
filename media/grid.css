@@ -54,10 +54,19 @@ body {
 }
 
 .toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);
   border: 1px solid transparent;
   padding: 0 12px;
+}
+
+.toolbar button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .toolbar button:hover {
