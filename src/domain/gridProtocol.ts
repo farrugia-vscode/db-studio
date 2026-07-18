@@ -37,7 +37,13 @@ export interface FkValuesResultMessage {
   values: string[];
 }
 
-export type ExtensionToWebview = GridDataMessage | GridErrorMessage | FkValuesResultMessage;
+/** The real SQL statements the pending edits will run, for the bottom review drawer. */
+export interface EditsPreviewMessage {
+  type: 'editsPreview';
+  statements: string[];
+}
+
+export type ExtensionToWebview = GridDataMessage | GridErrorMessage | FkValuesResultMessage | EditsPreviewMessage;
 
 /** Messages sent from the grid webview back to the extension host. */
 export interface ReadyMessage {
@@ -50,6 +56,12 @@ export interface ReloadMessage {
 
 export interface CommitMessage {
   type: 'commit';
+  edits: EditDto[];
+}
+
+/** Ask the host to render the pending edits as real SQL for the review drawer. */
+export interface PreviewEditsMessage {
+  type: 'previewEdits';
   edits: EditDto[];
 }
 
@@ -125,4 +137,5 @@ export type WebviewToExtension =
   | CopyMessage
   | ExportMessage
   | FkValuesMessage
-  | OpenRelatedMessage;
+  | OpenRelatedMessage
+  | PreviewEditsMessage;
