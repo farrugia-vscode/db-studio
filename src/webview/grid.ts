@@ -584,7 +584,8 @@ jsonModalSave.addEventListener('click', saveJsonModal);
 jsonModalCancel.addEventListener('click', closeJsonModal);
 jsonFormat.addEventListener('click', formatJsonModal);
 jsonModalText.addEventListener('input', validateJsonModal);
-// No keydown handling on purpose: the JSON textarea never intercepts a keystroke. Tidy up with Format.
+// Only Enter is assisted (scaffolding); every other key types literally — nothing else is intercepted.
+jsonModalText.addEventListener('keydown', onJsonEnter);
 
 // Pretty-print the JSON, first tidying common slips (trailing commas) so it usually just works.
 function formatJsonModal(): void {
@@ -1478,6 +1479,78 @@ function validateJsonModal(): boolean {
     jsonModalSave.disabled = true;
     return false;
   }
+}
+
+function onJsonEnter(event: KeyboardEvent): void {
+  if (event.key !== 'Enter') {
+    return;
+  }
+  event.preventDefault();
+  smartJsonEnter();
+}
+
+// The bracket enclosing `pos` ('{' object, '[' array, null at top level), ignoring string contents.
+function enclosingBracket(value: string, pos: number): '{' | '[' | null {
+  const stack: Array<'{' | '['> = [];
+  let inString = false;
+  for (let i = 0; i < pos; i += 1) {
+    const char = value[i];
+    if (inString) {
+      if (char === '\\') {
+        i += 1;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{' || char === '[') {
+      stack.push(char);
+    } else if (char === '}' || char === ']') {
+      stack.pop();
+    }
+  }
+  return stack.length > 0 ? stack[stack.length - 1] : null;
+}
+
+// Enter assistance: opening a { or [ drops its closer on the line below and puts the caret inside
+// (between "" for an object); otherwise a separating comma is added and, inside an object, the next
+// key is scaffolded. Only Enter is remapped — typing is never blocked.
+function smartJsonEnter(): void {
+  const value = jsonModalText.value;
+  const start = jsonModalText.selectionStart;
+  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+  const indent = /^[ \t]*/.exec(value.slice(lineStart, start))?.[0] ?? '';
+  const innerIndent = `${indent}  `;
+  const prev = value[start - 1];
+  const closerAfter = value[start] === '}' || value[start] === ']';
+
+  if (prev === '{' || prev === '[') {
+    const isObject = prev === '{';
+    const keyPart = isObject ? '"": ' : '';
+    // Move an existing closer to its own line, or add the matching one when it's missing.
+    const tail = closerAfter ? `\n${indent}` : `\n${indent}${isObject ? '}' : ']'}`;
+    replaceJsonSelection(`\n${innerIndent}${keyPart}${tail}`, start + 1 + innerIndent.length + (isObject ? 1 : 0));
+    return;
+  }
+
+  const lineBefore = value.slice(lineStart, start).trimEnd();
+  const needsComma = lineBefore !== '' && !',:{[('.includes(lineBefore.slice(-1));
+  const comma = needsComma ? ',' : '';
+  if (enclosingBracket(value, start) === '{') {
+    replaceJsonSelection(`${comma}\n${indent}"": `, start + comma.length + 1 + indent.length + 1);
+    return;
+  }
+  const insert = `${comma}\n${indent}`;
+  replaceJsonSelection(insert, start + insert.length);
+}
+
+function replaceJsonSelection(text: string, caret: number): void {
+  const value = jsonModalText.value;
+  jsonModalText.value = value.slice(0, jsonModalText.selectionStart) + text + value.slice(jsonModalText.selectionEnd);
+  jsonModalText.selectionStart = jsonModalText.selectionEnd = caret;
+  validateJsonModal();
 }
 
 function saveJsonModal(): void {
