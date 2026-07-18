@@ -153,6 +153,11 @@ body {
   border-color: var(--vscode-focusBorder);
 }
 
+.querybar input::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--label-color));
+  opacity: 0.55;
+}
+
 .col-visibility {
   position: relative;
   display: inline-flex;
