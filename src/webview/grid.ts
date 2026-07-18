@@ -1456,30 +1456,33 @@ function prettyJson(value: string | null): string {
   }
 }
 
-// Live validity: runs on every keystroke, colors the status and gates Save.
-// Validity is a hint, never a block: Save always stays enabled so you can keep editing freely.
+// Live validity: colors the status and disables Save on invalid JSON (typing stays free — only
+// the Save button is gated, never the textarea).
 function validateJsonModal(): boolean {
   const text = jsonModalText.value.trim();
-  jsonModalSave.disabled = false;
   if (text === '') {
     jsonStatus.textContent = 'empty → NULL';
     jsonStatus.className = 'json-status';
+    jsonModalSave.disabled = false;
     return true;
   }
   try {
     JSON.parse(text);
     jsonStatus.textContent = '● Valid JSON';
     jsonStatus.className = 'json-status ok';
+    jsonModalSave.disabled = false;
     return true;
   } catch (error) {
     jsonStatus.textContent = `● ${(error as Error).message}`;
     jsonStatus.className = 'json-status error';
+    jsonModalSave.disabled = true;
     return false;
   }
 }
 
 function saveJsonModal(): void {
-  if (!jsonTarget) {
+  // Never persist invalid JSON (backs up the disabled Save button).
+  if (!jsonTarget || !validateJsonModal()) {
     return;
   }
   pushUndo();
