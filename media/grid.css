@@ -59,7 +59,7 @@ body {
   gap: 6px;
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);
-  border: 1px solid transparent;
+  border: 1px solid var(--vscode-contrastBorder, var(--vscode-panel-border));
   padding: 0 12px;
 }
 
@@ -200,6 +200,26 @@ body {
 
 .col-menu label:hover {
   background: var(--vscode-list-hoverBackground);
+}
+
+.col-menu label:focus-within {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.col-menu-name {
+  flex: 1 1 auto;
+}
+
+.col-menu-type {
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+}
+
+.col-menu label:focus-within .col-menu-type {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .col-menu input {

@@ -97,8 +97,10 @@ colMenuToggle.addEventListener('click', (event) => {
   colMenu.hidden = !colMenu.hidden;
   if (!colMenu.hidden) {
     buildColMenu();
+    colMenu.querySelector<HTMLInputElement>('input[type=checkbox]')?.focus();
   }
 });
+colMenu.addEventListener('keydown', onColMenuKeydown);
 // Click anywhere else closes the column menu.
 document.addEventListener('mousedown', (event) => {
   if (!colMenu.hidden && !colMenu.contains(event.target as Node) && event.target !== colMenuToggle) {
@@ -349,8 +351,29 @@ function buildColMenu(): void {
       }
       render();
     });
-    label.append(checkbox, document.createTextNode(column.name));
+    const name = document.createElement('span');
+    name.className = 'col-menu-name';
+    name.textContent = column.name;
+    const type = document.createElement('span');
+    type.className = 'col-menu-type';
+    type.textContent = column.type;
+    label.append(checkbox, name, type);
     colMenu.appendChild(label);
+  }
+}
+
+// Arrow-key navigation between the column checkboxes; Escape closes and returns focus to the toggle.
+function onColMenuKeydown(event: KeyboardEvent): void {
+  const boxes = [...colMenu.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
+  const current = boxes.indexOf(document.activeElement as HTMLInputElement);
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    const next = event.key === 'ArrowDown' ? current + 1 : current - 1;
+    boxes[(next + boxes.length) % boxes.length]?.focus();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    colMenu.hidden = true;
+    colMenuToggle.focus();
   }
 }
 
@@ -1050,7 +1073,9 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
 
   const cell = document.createElement('td');
   const input = document.createElement('input');
-  const isJson = editable && column.type.toLowerCase().includes('json');
+  // Route to the multi-line JSON editor for real JSON columns AND for text columns whose value
+  // looks like JSON (object/array) — otherwise Enter would just commit the single-line input.
+  const isJson = editable && (column.type.toLowerCase().includes('json') || looksLikeJson(model.values[column.name]));
   const dateType = editable && !isJson ? dateInputType(column.type) : null;
   // Foreign-key columns get a dropdown of referenced values (loaded on first edit).
   const fk = editable && !isJson && !dateType ? foreignKeyFor(column.name) : undefined;
@@ -1225,6 +1250,11 @@ function enumValues(type: string): string[] | null {
     return null;
   }
   return match[1].split(',').map((part) => part.trim().replace(/^'(.*)'$/, '$1').replace(/''/g, "'"));
+}
+
+// A value stored in a text column but shaped like JSON (object/array) deserves the JSON editor.
+function looksLikeJson(value: CellValue): boolean {
+  return value !== null && /^\s*[[{]/.test(value);
 }
 
 function buildEnumCell(model: RowModel, column: ColumnMeta, options: string[]): HTMLTableCellElement {
@@ -1424,10 +1454,14 @@ function autoIndentNewline(): void {
   if (opensBlock && closesAfter) {
     const inner = `${indent}  `;
     replaceSelection(`\n${inner}\n${indent}`, start + 1 + inner.length);
-  } else {
-    const insert = `\n${indent}${opensBlock ? '  ' : ''}`;
-    replaceSelection(insert, start + insert.length);
+    return;
   }
+  // When the line already holds a complete value, drop the separating comma in for you.
+  const lineBefore = value.slice(lineStart, start).trimEnd();
+  const lastChar = lineBefore.slice(-1);
+  const needsComma = lineBefore !== '' && !opensBlock && !',:{[('.includes(lastChar);
+  const insert = `${needsComma ? ',' : ''}\n${indent}${opensBlock ? '  ' : ''}`;
+  replaceSelection(insert, start + insert.length);
 }
 
 function insertAtCursor(text: string): void {
