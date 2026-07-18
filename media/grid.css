@@ -22,36 +22,51 @@ body {
   background: var(--vscode-editor-background);
 }
 
+/* ---- Design tokens: one control height / radius shared by every bar ---- */
+:root {
+  --ctl-h: 28px;
+  --ctl-radius: 5px;
+  --ctl-pad-x: 10px;
+  --bar-pad-x: 16px;
+  --label-color: var(--vscode-descriptionForeground);
+}
+
 /* ---- Toolbar ---- */
 .toolbar {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
+  gap: 8px;
+  padding: 8px var(--bar-pad-x);
   background: var(--vscode-editorWidget-background);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-.toolbar button {
+/* Every clickable control on the bars shares one shape. */
+.toolbar button,
+.toolbar select {
+  height: var(--ctl-h);
+  box-sizing: border-box;
   cursor: pointer;
+  border-radius: var(--ctl-radius);
+  font-size: 12px;
+  font-family: var(--vscode-font-family);
+}
+
+.toolbar button {
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-panel-border);
-  padding: 5px 16px;
-  border-radius: 4px;
-  font-size: 12px;
+  border: 1px solid transparent;
+  padding: 0 12px;
 }
 
 .toolbar button:hover {
   background: var(--vscode-button-secondaryHoverBackground);
-  border-color: var(--vscode-focusBorder);
 }
 
 .toolbar button.primary {
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
-  border-color: var(--vscode-button-background);
 }
 
 .toolbar button.primary:hover {
@@ -63,59 +78,84 @@ body {
   cursor: default;
 }
 
-.toolbar #filter {
-  flex: 1;
-  min-width: 0;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 12px;
-}
-
-.toolbar #filter:focus {
-  outline: 1px solid var(--vscode-focusBorder);
+.toolbar select {
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+  padding: 0 6px;
 }
 
 .toolbar #status {
   margin-left: auto;
-  margin-right: 4px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
   font-size: 12px;
 }
 
 .toolbar .copy-format {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  color: var(--label-color);
 }
 
-.toolbar #copyFormat {
+/* ---- WHERE / ORDER BY bar ---- */
+.querybar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px var(--bar-pad-x);
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.query-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* WHERE is the longer clause, so it gets twice the room of ORDER BY. */
+.query-field.where {
+  flex: 2 1 0;
+}
+
+.query-field.order {
+  flex: 1 1 0;
+}
+
+.query-label {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  color: var(--label-color);
+}
+
+.querybar input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--ctl-h);
+  box-sizing: border-box;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 4px;
-  padding: 2px 6px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: var(--ctl-radius);
+  padding: 0 var(--ctl-pad-x);
   font-size: 12px;
-  cursor: pointer;
+  font-family: var(--vscode-editor-font-family);
+}
+
+.querybar input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
 }
 
 .col-visibility {
   position: relative;
   display: inline-flex;
-}
-
-.col-visibility #colMenuToggle {
-  cursor: pointer;
-  border: 1px solid var(--vscode-panel-border);
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border-radius: 4px;
-  padding: 3px 10px;
-  font-size: 12px;
 }
 
 .col-menu {

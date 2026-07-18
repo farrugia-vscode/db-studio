@@ -40,6 +40,9 @@ let dateLocale = '';
 const MIN_WIDTH = 56;
 const INITIAL_MAX_WIDTH = 360;
 const CELL_PADDING = 34;
+// Width the header reserves for its funnel + sort buttons, and extra for the PK key glyph.
+const HEADER_CONTROLS = 40;
+const PK_KEY_WIDTH = 18;
 const measureCtx = document.createElement('canvas').getContext('2d');
 let cellFont = '12px monospace';
 
@@ -908,7 +911,10 @@ function measureColumn(index: number, maxWidth: number): number {
   measureCtx.font = cellFont;
   const column = renderColumns[index];
   const isDate = isDateColumn(column.type);
-  let widest = measureCtx.measureText(column.name).width + (column.isPrimaryKey ? 16 : 0);
+  // The header shows the name plus the funnel + sort buttons (and a key on the PK), so reserve
+  // their width — otherwise a column of short values clips its own header (e.g. "type" → "t…").
+  const headerControls = HEADER_CONTROLS + (column.isPrimaryKey ? PK_KEY_WIDTH : 0);
+  let widest = measureCtx.measureText(column.name).width + headerControls;
   for (const model of rowModels) {
     const value = model.values[column.name];
     const text = isDate && value !== null ? formatDate(value, dateLocale) : value ?? 'NULL';
