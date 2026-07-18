@@ -51,7 +51,6 @@ const revertButton = element<HTMLButtonElement>('revert');
 const reloadButton = element<HTMLButtonElement>('reload');
 const filterInput = element<HTMLInputElement>('filter');
 const orderByInput = element<HTMLInputElement>('orderBy');
-const txModeSelect = element<HTMLSelectElement>('txMode');
 const pagerFirst = element<HTMLButtonElement>('pagerFirst');
 const pagerPrev = element<HTMLButtonElement>('pagerPrev');
 const pagerNext = element<HTMLButtonElement>('pagerNext');
@@ -68,8 +67,6 @@ let offset = 0;
 let pageSize = 100;
 // The active ORDER BY clause (without the keyword); drives header arrows and the order-by box.
 let orderBy = '';
-// 'manual' (default): edits wait for Commit. 'auto': each completed edit commits immediately.
-let txMode: 'manual' | 'auto' = 'manual';
 
 // Excel-like rectangular selection (cell coordinates into rowModels / columns).
 let selAnchor: { r: number; c: number } | null = null;
@@ -91,10 +88,6 @@ reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' })
 filterInput.addEventListener('search', () => api.postMessage({ type: 'filter', value: filterInput.value }));
 orderByInput.addEventListener('search', () => api.postMessage({ type: 'order', orderBy: orderByInput.value }));
 exportButton.addEventListener('click', exportSelection);
-txModeSelect.addEventListener('change', () => {
-  txMode = txModeSelect.value === 'auto' ? 'auto' : 'manual';
-  maybeAutoCommit();
-});
 
 colMenuToggle.addEventListener('click', (event) => {
   event.stopPropagation();
@@ -1050,7 +1043,6 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
       bulkRect = null;
       applyBulkEdit(rect, model.values[column.name] ?? '');
     }
-    maybeAutoCommit();
   });
 
   if (isJson) {
@@ -1476,21 +1468,6 @@ function refreshPending(): void {
   commitButton.hidden = count === 0;
   revertButton.hidden = count === 0;
   status.textContent = count > 0 ? `${count} pending change(s)` : dirty ? 'unsaved changes' : '';
-  maybeAutoCommit();
-}
-
-// In Auto mode, commit as soon as an edit is finalized (never mid-typing).
-function maybeAutoCommit(): void {
-  if (txMode !== 'auto') {
-    return;
-  }
-  const active = document.activeElement;
-  if (active instanceof HTMLInputElement && !active.readOnly) {
-    return; // a cell is still being edited
-  }
-  if (computeEdits().length > 0) {
-    commit();
-  }
 }
 
 function hasLocalChanges(): boolean {

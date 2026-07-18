@@ -103,8 +103,8 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     const nodes = tables.map((table) => {
       const node = new SchemaNode('table', table, tableState, parent.connectionName, namespace, table);
       node.iconPath = new vscode.ThemeIcon('table');
-      // Open the data grid when the table row is activated (honors the user's single/double-click mode).
-      node.command = { command: 'dbStudio.openTableData', title: 'Open Table Data', arguments: [node] };
+      // No row command on purpose: a click/double-click never opens the grid (and never
+      // fights the expand toggle). Open the data via the inline "Open Table Data" action.
       return node;
     });
 
