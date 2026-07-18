@@ -210,7 +210,7 @@
           "group": "inline"
         },
         {
-          "command": "dbStudio.createTable",
+          "command": "dbStudio.runQuery",
           "when": "view == dbStudio.explorer && viewItem == namespace",
           "group": "inline"
         },
@@ -320,6 +320,11 @@
           "type": "string",
           "default": "",
           "description": "Locale for displaying date/time columns (e.g. fr-FR, en-US). Empty = raw value (YYYY-MM-DD HH:MM:SS)."
+        },
+        "dbStudio.showTableStructure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Make table nodes expandable to show Columns / Keys / Foreign keys / Indexes. Disable to make tables non-expandable (a double-click then only opens the data, never toggles a submenu)."
         }
       }
     }

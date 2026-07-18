@@ -2,6 +2,10 @@
 export interface ConsoleInitMessage {
   type: 'init';
   sql: string;
+  /** Schemas the connection exposes, for the console's schema picker. */
+  namespaces: string[];
+  /** The schema queries run against (preselected when launched from a schema node). */
+  namespace: string;
 }
 
 export interface ConsoleResultMessage {
@@ -30,11 +34,18 @@ export interface ConsoleHistoryMessage {
   items: string[];
 }
 
+/** Preselect a schema in an already-open console (relaunched from a schema node). */
+export interface ConsoleSelectSchemaMessage {
+  type: 'selectSchema';
+  namespace: string;
+}
+
 export type ExtensionToConsole =
   | ConsoleInitMessage
   | ConsoleResultMessage
   | ConsoleSchemaMessage
-  | ConsoleHistoryMessage;
+  | ConsoleHistoryMessage
+  | ConsoleSelectSchemaMessage;
 
 /** Messages from the SQL console webview back to the extension host. */
 export interface ConsoleReadyMessage {
@@ -49,6 +60,18 @@ export interface ConsoleSaveMessage {
 export interface ConsoleRunMessage {
   type: 'run';
   sql: string;
+  /** Schema to run against (from the picker). */
+  namespace: string;
 }
 
-export type ConsoleToExtension = ConsoleReadyMessage | ConsoleSaveMessage | ConsoleRunMessage;
+/** The user picked another schema in the console; refresh autocomplete for it. */
+export interface ConsoleSchemaChangeMessage {
+  type: 'schemaChange';
+  namespace: string;
+}
+
+export type ConsoleToExtension =
+  | ConsoleReadyMessage
+  | ConsoleSaveMessage
+  | ConsoleRunMessage
+  | ConsoleSchemaChangeMessage;

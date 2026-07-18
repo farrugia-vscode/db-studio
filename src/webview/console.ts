@@ -16,6 +16,10 @@ const historyToggle = byId<HTMLButtonElement>('historyToggle');
 const historyPanel = byId<HTMLDivElement>('historyPanel');
 const historyList = byId<HTMLUListElement>('historyList');
 const historyEmpty = byId<HTMLSpanElement>('historyEmpty');
+const schemaSelect = byId<HTMLSelectElement>('schema');
+
+// The schema queries run against and autocomplete draws from.
+let currentNamespace = '';
 
 // Common SQL keywords offered by autocomplete alongside the schema.
 const KEYWORDS = [
@@ -40,12 +44,29 @@ let saveTimer = 0;
 
 runButton.addEventListener('click', run);
 historyToggle.addEventListener('click', toggleHistory);
+schemaSelect.addEventListener('change', () => {
+  currentNamespace = schemaSelect.value;
+  cachedColumns = null;
+  api.postMessage({ type: 'schemaChange', namespace: currentNamespace });
+});
 editor.addEventListener('input', () => {
   scheduleSave();
   updateAutocomplete();
 });
 editor.addEventListener('keydown', onEditorKeydown);
 editor.addEventListener('mousedown', () => { historyPanel.hidden = true; });
+// Close the history dropdown when clicking anywhere but the panel or its toggle.
+document.addEventListener('mousedown', (event) => {
+  const target = event.target as Node;
+  if (!historyPanel.hidden && !historyPanel.contains(target) && target !== historyToggle) {
+    historyPanel.hidden = true;
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !historyPanel.hidden) {
+    historyPanel.hidden = true;
+  }
+});
 editor.addEventListener('blur', () => window.setTimeout(closeAutocomplete, 120));
 editor.addEventListener('scroll', closeAutocomplete);
 
@@ -53,11 +74,20 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToConsole>) => 
   const message = event.data;
   if (message.type === 'init') {
     editor.value = message.sql;
+    populateSchemas(message.namespaces, message.namespace);
+    return;
+  }
+  if (message.type === 'selectSchema') {
+    schemaSelect.value = message.namespace;
+    currentNamespace = message.namespace;
+    cachedColumns = null;
+    api.postMessage({ type: 'schemaChange', namespace: currentNamespace });
     return;
   }
   if (message.type === 'schema') {
     schema = message.tables;
     columnsByTable = new Map(schema.map((table) => [table.name.toLowerCase(), table.columns]));
+    cachedColumns = null;
     return;
   }
   if (message.type === 'history') {
@@ -312,7 +342,13 @@ function run(): void {
   }
   closeAutocomplete();
   status.textContent = 'Running…';
-  api.postMessage({ type: 'run', sql });
+  api.postMessage({ type: 'run', sql, namespace: currentNamespace });
+}
+
+function populateSchemas(namespaces: string[], selected: string): void {
+  schemaSelect.replaceChildren(...namespaces.map((name) => new Option(name, name)));
+  schemaSelect.value = selected;
+  currentNamespace = selected;
 }
 
 function renderResult(message: ExtensionToConsole & { type: 'result' }): void {

@@ -3,7 +3,6 @@ import { DriverFactory } from './drivers/driverFactory';
 import { ConnectionManager } from './connections/connectionManager';
 import { SchemaTreeProvider } from './views/schemaTreeProvider';
 import { ConnectionFormView } from './views/connectionFormView';
-import { ResultsView } from './views/resultsView';
 import { DataGridView } from './views/dataGridView';
 import { TableDesignerView } from './views/tableDesignerView';
 import { SqlConsoleView } from './views/sqlConsoleView';
@@ -16,7 +15,6 @@ import { VISIBLE_PREFIX, VISIBLE_CONNECTIONS_KEY } from './views/schemaTreeProvi
 let manager: ConnectionManager;
 let treeProvider: SchemaTreeProvider;
 let formView: ConnectionFormView;
-let resultsView: ResultsView;
 let dataGridView: DataGridView;
 let designerView: TableDesignerView;
 let sqlConsoleView: SqlConsoleView;
@@ -31,7 +29,6 @@ export function activate(context: vscode.ExtensionContext): void {
   formView = new ConnectionFormView(context, manager, () => {
     treeProvider.refresh();
   });
-  resultsView = new ResultsView();
   dataGridView = new DataGridView(context, manager);
   designerView = new TableDesignerView(context, manager, () => treeProvider.refresh());
   sqlConsoleView = new SqlConsoleView(context, manager);
@@ -91,7 +88,7 @@ async function selectConnections(): Promise<void> {
 async function openSqlConsole(node?: SchemaNode): Promise<void> {
   const name = node ? node.connectionName : await pickConnectionName();
   if (name) {
-    sqlConsoleView.open(name);
+    sqlConsoleView.open(name, node?.kind === 'namespace' ? node.namespace : undefined);
   }
 }
 
@@ -251,23 +248,13 @@ async function removeConnection(node?: SchemaNode): Promise<void> {
   treeProvider.refresh();
 }
 
+// "Run SQL Query" opens the full console; from a schema node it preselects that schema.
 async function runQuery(node?: SchemaNode): Promise<void> {
   const name = node ? node.connectionName : await pickConnectionName();
   if (!name) {
     return;
   }
-  const sql = await resolveSql();
-  if (!sql) {
-    return;
-  }
-  try {
-    const driver = await manager.getDriver(name);
-    const result = await driver.query(sql);
-    const icon = manager.getConnection(name)?.icon;
-    resultsView.show(icon ? `${icon} Query · ${name}` : `Query · ${name}`, result);
-  } catch (error) {
-    reportError(error);
-  }
+  sqlConsoleView.open(name, node?.kind === 'namespace' ? node.namespace : undefined);
 }
 
 async function openTableData(node?: SchemaNode): Promise<void> {
@@ -385,17 +372,6 @@ async function runTableStatement(
   } catch (error) {
     reportError(error);
   }
-}
-
-async function resolveSql(): Promise<string | undefined> {
-  const editor = vscode.window.activeTextEditor;
-  if (editor && !editor.selection.isEmpty) {
-    return editor.document.getText(editor.selection);
-  }
-  if (editor && editor.document.languageId === 'sql') {
-    return editor.document.getText();
-  }
-  return vscode.window.showInputBox({ prompt: 'SQL query', ignoreFocusOut: true });
 }
 
 async function pickConnectionName(): Promise<string | undefined> {

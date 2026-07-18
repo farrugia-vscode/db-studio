@@ -13,17 +13,26 @@ const MAX_HISTORY = 50;
  */
 export class SqlConsoleView {
   private readonly panels = new Map<string, vscode.WebviewPanel>();
+  // Schema to preselect on first open (when launched from a schema node).
+  private readonly preselected = new Map<string, string>();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly manager: ConnectionManager,
   ) {}
 
-  open(connectionName: string): void {
+  open(connectionName: string, namespace?: string): void {
     const existing = this.panels.get(connectionName);
     if (existing) {
       existing.reveal();
+      // Launching again from a schema node preselects it in the open console.
+      if (namespace) {
+        this.post(existing, { type: 'selectSchema', namespace });
+      }
       return;
+    }
+    if (namespace) {
+      this.preselected.set(connectionName, namespace);
     }
     const mediaUri = vscode.Uri.joinPath(this.context.extensionUri, 'media');
     const panel = vscode.window.createWebviewPanel(
@@ -34,7 +43,10 @@ export class SqlConsoleView {
     );
     panel.webview.html = this.renderHtml(panel.webview, mediaUri);
     panel.webview.onDidReceiveMessage((message: ConsoleToExtension) => this.handleMessage(connectionName, panel, message));
-    panel.onDidDispose(() => this.panels.delete(connectionName));
+    panel.onDidDispose(() => {
+      this.panels.delete(connectionName);
+      this.preselected.delete(connectionName);
+    });
     this.panels.set(connectionName, panel);
   }
 
@@ -44,27 +56,51 @@ export class SqlConsoleView {
     message: ConsoleToExtension,
   ): Promise<void> {
     if (message.type === 'ready') {
-      const sql = this.context.workspaceState.get<string>(STORAGE_PREFIX + connectionName, '');
-      this.post(panel, { type: 'init', sql });
-      this.post(panel, { type: 'history', items: this.loadHistory(connectionName) });
-      void this.sendSchema(connectionName, panel);
+      await this.sendInit(connectionName, panel);
       return;
     }
     if (message.type === 'save') {
       await this.context.workspaceState.update(STORAGE_PREFIX + connectionName, message.sql);
       return;
     }
+    if (message.type === 'schemaChange') {
+      void this.sendSchema(connectionName, panel, message.namespace);
+      return;
+    }
     if (message.type === 'run') {
-      await this.run(connectionName, panel, message.sql);
+      await this.run(connectionName, panel, message.sql, message.namespace);
     }
   }
 
-  private async run(connectionName: string, panel: vscode.WebviewPanel, sql: string): Promise<void> {
+  private async sendInit(connectionName: string, panel: vscode.WebviewPanel): Promise<void> {
+    const sql = this.context.workspaceState.get<string>(STORAGE_PREFIX + connectionName, '');
+    const namespaces = await this.listNamespaces(connectionName);
+    const configured = this.manager.getConnection(connectionName)?.database?.trim();
+    const preselected = this.preselected.get(connectionName);
+    const namespace = pickNamespace(namespaces, preselected ?? configured);
+    this.post(panel, { type: 'init', sql, namespaces, namespace });
+    this.post(panel, { type: 'history', items: this.loadHistory(connectionName) });
+    void this.sendSchema(connectionName, panel, namespace);
+  }
+
+  private async listNamespaces(connectionName: string): Promise<string[]> {
+    try {
+      const driver = await this.manager.getDriver(connectionName);
+      return await driver.listNamespaces();
+    } catch {
+      return [];
+    }
+  }
+
+  private async run(connectionName: string, panel: vscode.WebviewPanel, sql: string, namespace: string): Promise<void> {
     if (sql.trim() === '') {
       return;
     }
     try {
       const driver = await this.manager.getDriver(connectionName);
+      if (namespace) {
+        await driver.useNamespace(namespace);
+      }
       const result = await driver.query(sql);
       await this.pushHistory(connectionName, panel, sql);
       this.post(panel, {
@@ -100,12 +136,10 @@ export class SqlConsoleView {
     this.post(panel, { type: 'history', items: capped });
   }
 
-  /** Snapshot the default database's tables and columns so the editor can autocomplete. */
-  private async sendSchema(connectionName: string, panel: vscode.WebviewPanel): Promise<void> {
+  /** Snapshot a schema's tables and columns so the editor can autocomplete. */
+  private async sendSchema(connectionName: string, panel: vscode.WebviewPanel, namespace: string): Promise<void> {
     try {
       const driver = await this.manager.getDriver(connectionName);
-      const configured = this.manager.getConnection(connectionName)?.database?.trim();
-      const namespace = configured || (await driver.listNamespaces())[0];
       if (!namespace) {
         return;
       }
@@ -145,6 +179,9 @@ export class SqlConsoleView {
     <button id="historyToggle" title="Recent queries">History ⌄</button>
     <span class="hint">Ctrl+Enter — run selection, or the whole script</span>
     <span id="status"></span>
+    <span class="schema-picker" title="Schema queries run against">Schema
+      <select id="schema"></select>
+    </span>
   </div>
   <div id="editorWrap">
     <textarea id="editor" spellcheck="false" placeholder="SELECT * FROM …"></textarea>
@@ -159,6 +196,14 @@ export class SqlConsoleView {
 </body>
 </html>`;
   }
+}
+
+// The preferred schema if it exists, else the first available.
+function pickNamespace(namespaces: string[], preferred?: string): string {
+  if (preferred && namespaces.includes(preferred)) {
+    return preferred;
+  }
+  return namespaces[0] ?? '';
 }
 
 function formatCell(value: unknown): string | null {
