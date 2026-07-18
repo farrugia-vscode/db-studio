@@ -584,7 +584,7 @@ jsonModalSave.addEventListener('click', saveJsonModal);
 jsonModalCancel.addEventListener('click', closeJsonModal);
 jsonFormat.addEventListener('click', formatJsonModal);
 jsonModalText.addEventListener('input', validateJsonModal);
-jsonModalText.addEventListener('keydown', onJsonKeydown);
+// No keydown handling on purpose: the JSON textarea never intercepts a keystroke. Tidy up with Format.
 
 // Pretty-print the JSON, first tidying common slips (trailing commas) so it usually just works.
 function formatJsonModal(): void {
@@ -1476,84 +1476,6 @@ function validateJsonModal(): boolean {
     jsonStatus.className = 'json-status error';
     return false;
   }
-}
-
-// Predictable editor assistance only: Enter keeps indentation (and adds a separating comma when
-// the line already holds a value), Tab inserts spaces. No auto-pairing — you type quotes yourself.
-function onJsonKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    autoIndentNewline();
-  } else if (event.key === 'Tab') {
-    event.preventDefault();
-    insertAtCursor('  ');
-  }
-}
-
-// The bracket currently enclosing `pos` ('{' object, '[' array, null at top level), ignoring strings.
-function enclosingBracket(value: string, pos: number): '{' | '[' | null {
-  const stack: Array<'{' | '['> = [];
-  let inString = false;
-  for (let i = 0; i < pos; i += 1) {
-    const char = value[i];
-    if (inString) {
-      if (char === '\\') {
-        i += 1;
-      } else if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (char === '"') {
-      inString = true;
-    } else if (char === '{' || char === '[') {
-      stack.push(char);
-    } else if (char === '}' || char === ']') {
-      stack.pop();
-    }
-  }
-  return stack.length > 0 ? stack[stack.length - 1] : null;
-}
-
-// Enter scaffolds the next member: a separating comma when needed, then — inside an object —
-// `"": ` with the caret placed between the quotes, ready to type the key. Never blocks typing.
-function autoIndentNewline(): void {
-  const value = jsonModalText.value;
-  const start = jsonModalText.selectionStart;
-  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-  const indent = /^[ \t]*/.exec(value.slice(lineStart, start))?.[0] ?? '';
-  const opensBlock = value[start - 1] === '{' || value[start - 1] === '[';
-  const closesAfter = value[start] === '}' || value[start] === ']';
-  const innerIndent = opensBlock ? `${indent}  ` : indent;
-
-  const lineBefore = value.slice(lineStart, start).trimEnd();
-  const lastChar = lineBefore.slice(-1);
-  const needsComma = lineBefore !== '' && !opensBlock && !',:{[('.includes(lastChar);
-  const comma = needsComma ? ',' : '';
-  // When splitting an empty {}/[] pair, drop the closer onto its own line below.
-  const trailer = opensBlock && closesAfter ? `\n${indent}` : '';
-
-  if (enclosingBracket(value, start) === '{') {
-    const insert = `${comma}\n${innerIndent}"": ${trailer}`;
-    // Caret between the two quotes: past comma, newline, indent and the opening quote.
-    const caret = start + comma.length + 1 + innerIndent.length + 1;
-    replaceSelection(insert, caret);
-    return;
-  }
-  const insert = `${comma}\n${innerIndent}${trailer}`;
-  const caret = start + comma.length + 1 + innerIndent.length;
-  replaceSelection(insert, caret);
-}
-
-function insertAtCursor(text: string): void {
-  replaceSelection(text, jsonModalText.selectionStart + text.length);
-}
-
-function replaceSelection(text: string, caret: number): void {
-  const value = jsonModalText.value;
-  jsonModalText.value = value.slice(0, jsonModalText.selectionStart) + text + value.slice(jsonModalText.selectionEnd);
-  jsonModalText.selectionStart = jsonModalText.selectionEnd = caret;
-  validateJsonModal();
 }
 
 function saveJsonModal(): void {
