@@ -571,13 +571,27 @@ const jsonModalText = element<HTMLTextAreaElement>('jsonModalText');
 const jsonStatus = element<HTMLSpanElement>('jsonStatus');
 const jsonModalSave = element<HTMLButtonElement>('jsonModalSave');
 const jsonModalCancel = element<HTMLButtonElement>('jsonModalCancel');
+const jsonFormat = element<HTMLButtonElement>('jsonFormat');
 
 let jsonTarget: { model: RowModel; column: ColumnMeta; input: HTMLInputElement; cell: HTMLTableCellElement } | null = null;
 
 jsonModalSave.addEventListener('click', saveJsonModal);
 jsonModalCancel.addEventListener('click', closeJsonModal);
+jsonFormat.addEventListener('click', formatJsonModal);
 jsonModalText.addEventListener('input', validateJsonModal);
 jsonModalText.addEventListener('keydown', onJsonKeydown);
+
+// Pretty-print the JSON, first tidying common slips (trailing commas) so it usually just works.
+function formatJsonModal(): void {
+  const tidied = jsonModalText.value.replace(/,(\s*[}\]])/g, '$1');
+  try {
+    jsonModalText.value = JSON.stringify(JSON.parse(tidied), null, 2);
+  } catch {
+    // Leave the text untouched when it can't be parsed; the status line explains why.
+  }
+  validateJsonModal();
+  jsonModalText.focus();
+}
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
@@ -1459,44 +1473,15 @@ function validateJsonModal(): boolean {
   }
 }
 
-const JSON_PAIRS: Record<string, string> = { '"': '"', '{': '}', '[': ']' };
-const JSON_CLOSERS = new Set(['"', '}', ']']);
-
-// Editor-like assistance: indent + comma on Enter, spaces on Tab, and auto-closing pairs so the
-// structure stays balanced without you having to type the closing "/}/] yourself.
+// Predictable editor assistance only: Enter keeps indentation (and adds a separating comma when
+// the line already holds a value), Tab inserts spaces. No auto-pairing — you type quotes yourself.
 function onJsonKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter') {
     event.preventDefault();
     autoIndentNewline();
-    return;
-  }
-  if (event.key === 'Tab') {
+  } else if (event.key === 'Tab') {
     event.preventDefault();
     insertAtCursor('  ');
-    return;
-  }
-  const field = jsonModalText;
-  const start = field.selectionStart;
-  const end = field.selectionEnd;
-  // Type "over" an auto-inserted closer instead of doubling it.
-  if (start === end && JSON_CLOSERS.has(event.key) && field.value[start] === event.key) {
-    event.preventDefault();
-    field.selectionStart = field.selectionEnd = start + 1;
-    return;
-  }
-  // Auto-close an opener; if there is a selection, wrap it.
-  const close = JSON_PAIRS[event.key];
-  if (close !== undefined) {
-    event.preventDefault();
-    const selected = field.value.slice(start, end);
-    field.value = field.value.slice(0, start) + event.key + selected + close + field.value.slice(end);
-    if (selected === '') {
-      field.selectionStart = field.selectionEnd = start + 1;
-    } else {
-      field.selectionStart = start + 1;
-      field.selectionEnd = start + 1 + selected.length;
-    }
-    validateJsonModal();
   }
 }
 
