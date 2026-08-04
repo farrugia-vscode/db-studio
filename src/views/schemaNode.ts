@@ -7,7 +7,7 @@ export type NodeKind = 'connection' | 'namespace' | 'group' | 'table' | 'tablePa
 export type GroupKind = 'views' | 'procedures' | 'functions' | 'triggers' | 'sequences';
 
 /** The PHPStorm-style folders shown under a table node. */
-export type TablePartKind = 'columns' | 'keys' | 'foreignKeys' | 'indexes';
+export type TablePartKind = 'columns' | 'foreignKeys' | 'indexes';
 
 /** A single node of the schema tree; carries the coordinates its children need. */
 export class SchemaNode extends vscode.TreeItem {

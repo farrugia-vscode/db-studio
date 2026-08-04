@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
-import type { ColumnMeta, ForeignKeyMeta, SchemaObjectKind } from '../domain/types';
+import type { ColumnMeta, ForeignKeyMeta, IndexMeta, SchemaObjectKind } from '../domain/types';
 import { GroupKind, SchemaNode, TablePartKind } from './schemaNode';
 
 const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
@@ -142,7 +142,7 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     });
   }
 
-  /** The PHPStorm-style folders under a table: Columns, Keys, Foreign keys, Indexes. */
+  /** The PHPStorm-style folders under a table: Columns, Foreign keys, Indexes. */
   private async buildTablePartNodes(parent: SchemaNode): Promise<SchemaNode[]> {
     const driver = await this.manager.getDriver(parent.connectionName);
     const namespace = parent.namespace!;
@@ -152,14 +152,13 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
       driver.listForeignKeys(namespace, table),
       driver.listIndexes(namespace, table),
     ]);
-    // Keys = the primary key plus every unique index; indexes list the primary key too.
-    const hasPrimaryKey = columns.some((column) => column.isPrimaryKey);
-    const uniqueIndexes = indexes.filter((index) => index.isUnique).length;
-    const primaryCount = hasPrimaryKey ? 1 : 0;
+    // Both engines back a unique constraint with an index, so a separate Keys folder
+    // would repeat what Indexes already lists. The primary key is counted apart: the
+    // drivers leave it out of listIndexes and it is rebuilt from the columns.
+    const primaryCount = columns.some((column) => column.isPrimaryKey) ? 1 : 0;
 
     const nodes: SchemaNode[] = [];
     this.pushTablePart(nodes, parent, 'columns', columns.length);
-    this.pushTablePart(nodes, parent, 'keys', primaryCount + uniqueIndexes);
     this.pushTablePart(nodes, parent, 'foreignKeys', foreignKeys.length);
     this.pushTablePart(nodes, parent, 'indexes', primaryCount + indexes.length);
     return nodes;
@@ -198,17 +197,6 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
       const fkColumns = new Set(foreignKeys.flatMap((fk) => fk.columns));
       return columns.map((column) => this.buildFieldNode(parent, column.name, describeColumn(column), columnIcon(column, fkColumns)));
     }
-    if (parent.tablePartKind === 'keys') {
-      const [columns, indexes] = await Promise.all([
-        driver.listColumns(namespace, table),
-        driver.listIndexes(namespace, table),
-      ]);
-      const nodes = this.primaryKeyNode(parent, columns, false);
-      for (const index of indexes.filter((index) => index.isUnique)) {
-        nodes.push(this.buildFieldNode(parent, index.name, `(${index.columns.join(', ')})`, 'key'));
-      }
-      return nodes;
-    }
     if (parent.tablePartKind === 'foreignKeys') {
       const foreignKeys = await driver.listForeignKeys(namespace, table);
       return foreignKeys.map((fk) => this.buildFieldNode(parent, fk.name, describeForeignKey(fk), 'references'));
@@ -217,22 +205,32 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
       driver.listColumns(namespace, table),
       driver.listIndexes(namespace, table),
     ]);
-    const nodes = this.primaryKeyNode(parent, columns, true);
-    for (const index of indexes) {
-      const suffix = index.isUnique ? ' UNIQUE' : '';
-      nodes.push(this.buildFieldNode(parent, index.name, `(${index.columns.join(', ')})${suffix}`, 'list-selection'));
-    }
-    return nodes;
+    // Primary first, then the unique ones: the closer an index is to identifying a row,
+    // the higher it belongs in the list.
+    const unique = indexes.filter((index) => index.isUnique);
+    const plain = indexes.filter((index) => !index.isUnique);
+
+    return [
+      ...this.primaryKeyNode(parent, columns),
+      ...unique.map((index) => this.buildIndexNode(parent, index, 'unique')),
+      ...plain.map((index) => this.buildIndexNode(parent, index, 'index')),
+    ];
   }
 
-  /** The synthetic PRIMARY entry shared by the Keys and Indexes folders (indexes mark it UNIQUE). */
-  private primaryKeyNode(parent: SchemaNode, columns: ColumnMeta[], asIndex: boolean): SchemaNode[] {
+  /**
+   * The primary key as an index entry: the drivers leave it out of `listIndexes`, where
+   * it would carry an engine-specific name instead of the PRIMARY every engine shows.
+   */
+  private primaryKeyNode(parent: SchemaNode, columns: ColumnMeta[]): SchemaNode[] {
     const pkColumns = columns.filter((column) => column.isPrimaryKey).map((column) => column.name);
     if (pkColumns.length === 0) {
       return [];
     }
-    const suffix = asIndex ? ' UNIQUE' : '';
-    return [this.buildFieldNode(parent, 'PRIMARY', `(${pkColumns.join(', ')})${suffix}`, 'key')];
+    return [this.buildFieldNode(parent, 'PRIMARY', `(${pkColumns.join(', ')})  primary`, INDEX_ICONS.primary)];
+  }
+
+  private buildIndexNode(parent: SchemaNode, index: IndexMeta, kind: IndexKind): SchemaNode {
+    return this.buildFieldNode(parent, index.name, `(${index.columns.join(', ')})  ${kind}`, INDEX_ICONS[kind]);
   }
 
   private buildFieldNode(parent: SchemaNode, label: string, description: string, icon: string): SchemaNode {
@@ -273,9 +271,17 @@ const GROUP_LABELS: Record<GroupKind, string> = {
 
 const TABLE_PART_LABELS: Record<TablePartKind, string> = {
   columns: 'Columns',
-  keys: 'Keys',
   foreignKeys: 'Foreign keys',
   indexes: 'Indexes',
+};
+
+/** What an index guarantees, from the strongest to the weakest. */
+type IndexKind = 'primary' | 'unique' | 'index';
+
+const INDEX_ICONS: Record<IndexKind, string> = {
+  primary: 'key',
+  unique: 'lock',
+  index: 'list-selection',
 };
 
 function describeColumn(column: ColumnMeta): string {
