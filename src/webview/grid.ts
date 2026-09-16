@@ -872,11 +872,11 @@ function openFilterPopup(column: ColumnMeta, anchor: HTMLElement): void {
 
 // Null needs a sentinel so it survives the checkbox's string value round-trip.
 function encodeValue(value: CellValue): string {
-  return value === null ? ' null' : `s${value}`;
+  return value === null ? '\0null' : `s${value}`;
 }
 
 function decodeValue(encoded: string): CellValue {
-  return encoded === ' null' ? null : encoded.slice(1);
+  return encoded === '\0null' ? null : encoded.slice(1);
 }
 
 function displayValue(value: CellValue): string {
