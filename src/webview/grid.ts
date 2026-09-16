@@ -774,7 +774,10 @@ function buildFooter(): HTMLTableSectionElement {
 function buildColgroup(): HTMLTableColElement {
   const group = document.createElement('colgroup');
   const actionsCol = document.createElement('col');
-  actionsCol.style.width = '28px';
+  // The gutter holds the line number (widened for its digit count) and the delete button on hover.
+  const maxLineNumber = offset + rowModels.length;
+  const digits = String(Math.max(1, maxLineNumber)).length;
+  actionsCol.style.width = `${Math.max(30, digits * 8 + 14)}px`;
   group.appendChild(actionsCol);
   for (const _column of renderColumns) {
     const col = document.createElement('col');
@@ -787,7 +790,10 @@ function buildColgroup(): HTMLTableColElement {
 function buildHead(): HTMLTableSectionElement {
   const head = document.createElement('thead');
   const row = document.createElement('tr');
-  row.appendChild(document.createElement('th'));
+  const gutterHead = document.createElement('th');
+  gutterHead.className = 'gutter';
+  gutterHead.textContent = '#';
+  row.appendChild(gutterHead);
   renderColumns.forEach((column, index) => {
     const cell = document.createElement('th');
     // Hover reveals the column's SQL type (PHPStorm-style).
@@ -1187,9 +1193,12 @@ function updateCellFont(): void {
 function buildBody(): HTMLTableSectionElement {
   const body = document.createElement('tbody');
   // Local column filters hide rows in the view only; rowIndex stays the absolute model index.
+  // lineNumber counts visible rows only and is offset by pagination, so it reads as the DB row position.
+  let lineNumber = offset;
   rowModels.forEach((model, rowIndex) => {
     if (rowPassesFilters(model)) {
-      body.appendChild(buildRow(model, rowIndex));
+      lineNumber += 1;
+      body.appendChild(buildRow(model, rowIndex, lineNumber));
     }
   });
   return body;
@@ -1204,10 +1213,10 @@ function rowPassesFilters(model: RowModel): boolean {
   return true;
 }
 
-function buildRow(model: RowModel, rowIndex: number): HTMLTableRowElement {
+function buildRow(model: RowModel, rowIndex: number, lineNumber: number): HTMLTableRowElement {
   const row = document.createElement('tr');
   applyRowState(row, model);
-  row.appendChild(buildDeleteCell(model, row));
+  row.appendChild(buildDeleteCell(model, row, lineNumber));
   renderColumns.forEach((column, colIndex) => {
     const cell = buildCell(model, column);
     cell.dataset.r = String(rowIndex);
@@ -1217,12 +1226,18 @@ function buildRow(model: RowModel, rowIndex: number): HTMLTableRowElement {
   return row;
 }
 
-function buildDeleteCell(model: RowModel, row: HTMLTableRowElement): HTMLTableCellElement {
+function buildDeleteCell(model: RowModel, row: HTMLTableRowElement, lineNumber: number): HTMLTableCellElement {
   const cell = document.createElement('td');
   cell.className = 'actions';
+  const number = document.createElement('span');
+  number.className = 'row-num';
+  number.textContent = String(lineNumber);
+  cell.appendChild(number);
   if (!hasPrimaryKey) {
     return cell;
   }
+  // With a PK, hovering the row swaps the number for the delete button (see grid.css).
+  cell.classList.add('actions--deletable');
   const button = document.createElement('button');
   button.textContent = '×';
   button.title = 'Delete row';
