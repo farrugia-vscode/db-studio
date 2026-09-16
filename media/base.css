@@ -467,6 +467,8 @@ td.null {
 
 /* ------------------------------------------------------------- Modal ---- */
 
+/* The scrim takes the editor's own background so it dims a dark theme and
+   frosts a light one, instead of dropping a black veil on both. */
 .modal {
   position: fixed;
   inset: 0;
@@ -481,10 +483,10 @@ td.null {
 .modal-box {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   width: min(760px, 92vw);
   max-height: 82vh;
-  padding: 18px;
+  padding: 20px 22px;
   background: var(--surface);
   border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
   border-radius: var(--modal-radius);
@@ -524,6 +526,8 @@ td.null {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
 }
 
 .modal-spacer {
