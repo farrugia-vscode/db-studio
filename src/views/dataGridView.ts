@@ -267,12 +267,14 @@ class GridSession {
   private async reload(): Promise<void> {
     try {
       const driver = await this.manager.getDriver(this.target.connectionName);
-      const [columns, foreignKeys, incomingForeignKeys] = await Promise.all([
+      const [columns, foreignKeys, incomingForeignKeys, indexes] = await Promise.all([
         driver.listColumns(this.target.namespace, this.target.table),
         driver.listForeignKeys(this.target.namespace, this.target.table),
         driver.listIncomingForeignKeys(this.target.namespace, this.target.table),
+        driver.listIndexes(this.target.namespace, this.target.table),
       ]);
       const pkColumns = columns.filter((column) => column.isPrimaryKey).map((column) => column.name);
+      const indexedColumns = [...new Set(indexes.flatMap((index) => index.columns))];
       const ref = driver.buildTableRef(this.target.namespace, this.target.table);
 
       // The filter is a raw SQL condition (PHPStorm-style), used as the WHERE clause.
@@ -298,6 +300,7 @@ class GridSession {
         pkColumns,
         foreignKeys,
         incomingForeignKeys,
+        indexedColumns,
         readOnly: this.isReadOnly(),
         rows: result.rows.map((row) => normalizeRow(row, columns)),
         total,

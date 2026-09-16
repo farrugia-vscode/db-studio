@@ -12,6 +12,8 @@ export interface GridDataMessage {
   foreignKeys: ForeignKeyMeta[];
   /** Foreign keys in other tables that point here (for reverse navigation). */
   incomingForeignKeys: IncomingForeignKey[];
+  /** Names of columns that are part of any index (for the header index badge). */
+  indexedColumns: string[];
   /** When true, the connection is read-only: the grid disables all editing. */
   readOnly: boolean;
   rows: Row[];

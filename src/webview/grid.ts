@@ -32,21 +32,30 @@ let pkColumns: string[] = [];
 let namespace = '';
 let foreignKeys: ForeignKeyMeta[] = [];
 let incomingForeignKeys: IncomingForeignKey[] = [];
+// Columns that participate in any index — drives the header index badge.
+let indexedColumns = new Set<string>();
 // Read-only connection → all editing is disabled (treated like a table with no primary key).
 let readOnly = false;
 let rowModels: RowModel[] = [];
 let hasPrimaryKey = false;
 let colElements: HTMLTableColElement[] = [];
+// Measured (or user-resized) width per column name, kept across reloads so sorting/paging
+// doesn't re-measure against the new page's rows and shift columns by a few pixels.
+const columnWidths = new Map<string, number>();
 let dateLocale = '';
 
 const MIN_WIDTH = 56;
 const INITIAL_MAX_WIDTH = 360;
 const CELL_PADDING = 34;
 // Width the header reserves for its funnel + sort buttons, and extra for the PK key glyph.
-const HEADER_CONTROLS = 40;
+const HEADER_CONTROLS = 46;
 const PK_KEY_WIDTH = 18;
+// Extra header room reserved for a foreign-key / index badge.
+const BADGE_WIDTH = 16;
 const measureCtx = document.createElement('canvas').getContext('2d');
 let cellFont = '12px monospace';
+// The header label is bold with letter-spacing, so it measures wider than a cell value.
+let headerFont = 'bold 12px monospace';
 
 const grid = element<HTMLTableElement>('grid');
 const notice = element<HTMLDivElement>('notice');
@@ -663,6 +672,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
     namespace = message.namespace;
     foreignKeys = message.foreignKeys;
     incomingForeignKeys = message.incomingForeignKeys;
+    indexedColumns = new Set(message.indexedColumns);
     readOnly = message.readOnly;
     filterInput.value = message.filter;
     orderByInput.value = message.orderBy;
@@ -706,6 +716,13 @@ function updatePager(): void {
 }
 
 function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[]): void {
+  // Drop remembered widths only when the column set actually changes (a different table/query),
+  // so sorting or paging the same table keeps its widths stable.
+  const sameColumns =
+    nextColumns.length === columns.length && nextColumns.every((column, index) => column.name === columns[index]?.name);
+  if (!sameColumns) {
+    columnWidths.clear();
+  }
   columns = nextColumns;
   columnOrder = nextColumns.map((column) => column.name);
   pkColumns = nextPkColumns;
@@ -800,6 +817,10 @@ function buildHead(): HTMLTableSectionElement {
       key.textContent = '🔑';
       inner.appendChild(key);
     }
+    const badge = buildColumnBadge(column);
+    if (badge) {
+      inner.appendChild(badge);
+    }
     inner.appendChild(buildFilterButton(column));
     inner.appendChild(buildSortButton(column.name));
     cell.appendChild(inner);
@@ -812,6 +833,27 @@ function buildHead(): HTMLTableSectionElement {
   });
   head.appendChild(row);
   return head;
+}
+
+// Small link glyph → a foreign-key column; small stacked-lines glyph → an indexed column.
+const FK_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 9.4 9.4 6.6"/><path d="M7.2 4.6 8.3 3.5a2.4 2.4 0 0 1 3.4 3.4L10.6 8"/><path d="M8.8 11.4 7.7 12.5a2.4 2.4 0 0 1-3.4-3.4L5.4 8"/></svg>';
+const INDEX_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3.5 4.5h9M3.5 8h6M3.5 11.5h3.5"/></svg>';
+
+// One badge per column at most: foreign key wins over a plain index (it's the more useful signal).
+// Primary keys already show the 🔑 and are skipped here.
+function buildColumnBadge(column: ColumnMeta): HTMLSpanElement | null {
+  const isForeignKey = foreignKeyFor(column.name) !== undefined;
+  const isIndexed = indexedColumns.has(column.name) && !column.isPrimaryKey;
+  if (!isForeignKey && !isIndexed) {
+    return null;
+  }
+  const badge = document.createElement('span');
+  badge.className = isForeignKey ? 'col-badge fk-badge' : 'col-badge index-badge';
+  badge.innerHTML = isForeignKey ? FK_SVG : INDEX_SVG;
+  badge.title = isForeignKey ? 'Foreign key' : 'Indexed';
+  return badge;
 }
 
 // A 3-state sort toggle at the right of each header: none (⇕) → ASC (▲) → DESC (▼) → none.
@@ -840,10 +882,14 @@ function parseOrder(clause: string): { column: string; direction: 'ASC' | 'DESC'
 }
 
 // Funnel toggle that opens the column's local filter popup (Excel-style value picker).
+// A funnel glyph (not a triangle, which reads as a sort control) for the local filter toggle.
+const FUNNEL_SVG =
+  '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12a.5.5 0 0 1 .4.8L10 9.2V13a.5.5 0 0 1-.7.45l-2-1A.5.5 0 0 1 7 12V9.2L1.6 3.8A.5.5 0 0 1 2 3z"/></svg>';
+
 function buildFilterButton(column: ColumnMeta): HTMLButtonElement {
   const button = document.createElement('button');
   button.className = 'filter-btn';
-  button.textContent = '▽';
+  button.innerHTML = FUNNEL_SVG;
   button.classList.toggle('active', columnFilters.has(column.name));
   button.title = 'Local filter';
   button.addEventListener('click', (event) => {
@@ -1039,8 +1085,13 @@ function startResize(event: MouseEvent, index: number): void {
   const startX = event.clientX;
   const startWidth = header.getBoundingClientRect().width;
   document.body.classList.add('resizing');
+  // Never let a drag shrink a column past its header label.
+  const minWidth = headerMinWidth(renderColumns[index]);
   const onMove = (moveEvent: MouseEvent): void => {
-    colElements[index].style.width = `${Math.max(MIN_WIDTH, startWidth + moveEvent.clientX - startX)}px`;
+    const width = Math.max(minWidth, startWidth + moveEvent.clientX - startX);
+    colElements[index].style.width = `${width}px`;
+    // Remember the user's width so reloads (sort/page) keep it instead of re-measuring.
+    columnWidths.set(renderColumns[index].name, width);
     syncTableWidth();
   };
   const onUp = (): void => {
@@ -1052,13 +1103,24 @@ function startResize(event: MouseEvent, index: number): void {
   document.addEventListener('mouseup', onUp);
 }
 
+// On (re)render, reuse a column's remembered width if we have one; only measure columns
+// seen for the first time. This keeps columns aligned across sorting, paging and filtering.
 function autofitAll(maxWidth: number): void {
   updateCellFont();
-  renderColumns.forEach((_column, index) => autofit(index, maxWidth));
+  renderColumns.forEach((column, index) => {
+    const remembered = columnWidths.get(column.name);
+    const width = remembered ?? measureColumn(index, maxWidth);
+    columnWidths.set(column.name, width);
+    colElements[index].style.width = `${width}px`;
+  });
+  syncTableWidth();
 }
 
+// Double-click on the resizer: force a fresh measure and remember it.
 function autofit(index: number, maxWidth: number): void {
-  colElements[index].style.width = `${measureColumn(index, maxWidth)}px`;
+  const width = measureColumn(index, maxWidth);
+  columnWidths.set(renderColumns[index].name, width);
+  colElements[index].style.width = `${width}px`;
   syncTableWidth();
 }
 
@@ -1072,39 +1134,54 @@ function syncTableWidth(): void {
   grid.style.width = `${total}px`;
 }
 
+// The smallest a column may ever be: its full header label plus the funnel/sort controls and the
+// cell padding. Headers must never ellipsize, so this is the floor for both auto-fit and resizing.
+function headerMinWidth(column: ColumnMeta): number {
+  if (!measureCtx) {
+    return MIN_WIDTH;
+  }
+  measureCtx.font = headerFont;
+  const badge = buildColumnBadge(column) ? BADGE_WIDTH : 0;
+  const controls = HEADER_CONTROLS + (column.isPrimaryKey ? PK_KEY_WIDTH : 0) + badge;
+  return Math.ceil(measureCtx.measureText(column.name).width) + controls + CELL_PADDING;
+}
+
 function measureColumn(index: number, maxWidth: number): number {
   if (!measureCtx) {
     return 150;
   }
-  measureCtx.font = cellFont;
   const column = renderColumns[index];
   const isDate = isDateColumn(column.type);
-  // The header shows the name plus the funnel + sort buttons (and a key on the PK), so reserve
-  // their width — otherwise a column of short values clips its own header (e.g. "type" → "t…").
-  const headerControls = HEADER_CONTROLS + (column.isPrimaryKey ? PK_KEY_WIDTH : 0);
-  let widest = measureCtx.measureText(column.name).width + headerControls;
+  measureCtx.font = cellFont;
+  let widestCell = 0;
   for (const model of rowModels) {
     const value = model.values[column.name];
     const text = isDate && value !== null ? formatDate(value, dateLocale) : value ?? 'NULL';
     const width = measureCtx.measureText(text).width;
-    if (width > widest) {
-      widest = width;
+    if (width > widestCell) {
+      widestCell = width;
     }
   }
   // Date columns need room for the native field's calendar/spinner controls in edit mode, so the
   // full date stays visible; datetime (with seconds) needs the most.
   const dateType = dateInputType(column.type);
   const extra = dateType === 'datetime-local' ? 72 : dateType === 'date' ? 44 : 0;
-  return Math.min(maxWidth, Math.max(MIN_WIDTH, Math.ceil(widest) + CELL_PADDING + extra));
+  const contentWidth = Math.ceil(widestCell) + CELL_PADDING + extra;
+  // Never below the header label, never above the initial cap.
+  return Math.min(maxWidth, Math.max(headerMinWidth(column), contentWidth));
 }
 
 function updateCellFont(): void {
   const sample = grid.querySelector('td input') ?? grid.querySelector('th');
-  if (!sample) {
-    return;
+  if (sample) {
+    const style = getComputedStyle(sample);
+    cellFont = style.font && style.font.trim() ? style.font : `${style.fontSize} ${style.fontFamily}`;
   }
-  const style = getComputedStyle(sample);
-  cellFont = style.font && style.font.trim() ? style.font : `${style.fontSize} ${style.fontFamily}`;
+  const label = grid.querySelector('.th-label');
+  if (label) {
+    const style = getComputedStyle(label);
+    headerFont = style.font && style.font.trim() ? style.font : `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  }
 }
 
 function buildBody(): HTMLTableSectionElement {
