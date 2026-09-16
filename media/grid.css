@@ -1,115 +1,4 @@
-:root {
-  --cell-px: 16px;
-  --cell-py: 11px;
-}
-
-/* `hidden` must always win over class-level display rules (flex/grid/block). */
-[hidden] {
-  display: none !important;
-}
-
-html,
-body {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  font-family: var(--vscode-font-family);
-  color: var(--vscode-foreground);
-  background: var(--vscode-editor-background);
-}
-
-/* ---- Design tokens: one control height / radius shared by every bar ---- */
-:root {
-  --ctl-h: 28px;
-  --ctl-radius: 5px;
-  --ctl-pad-x: 10px;
-  --bar-pad-x: 16px;
-  --label-color: var(--vscode-descriptionForeground);
-}
-
-/* ---- Toolbar ---- */
-.toolbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px var(--bar-pad-x);
-  background: var(--vscode-editorWidget-background);
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-/* Every clickable control on the bars shares one shape. */
-.toolbar button,
-.toolbar select {
-  height: var(--ctl-h);
-  box-sizing: border-box;
-  cursor: pointer;
-  border-radius: var(--ctl-radius);
-  font-size: 12px;
-  font-family: var(--vscode-font-family);
-}
-
-.toolbar button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--vscode-foreground);
-  /* A tint + a foreground-derived border so buttons stay legible in light and dark themes. */
-  background: color-mix(in srgb, var(--vscode-foreground) 7%, var(--vscode-editorWidget-background));
-  border: 1px solid color-mix(in srgb, var(--vscode-foreground) 24%, transparent);
-  padding: 0 12px;
-}
-
-.toolbar button:hover {
-  background: color-mix(in srgb, var(--vscode-foreground) 14%, var(--vscode-editorWidget-background));
-  border-color: color-mix(in srgb, var(--vscode-foreground) 42%, transparent);
-}
-
-.toolbar button svg {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-}
-
-.toolbar button.primary {
-  color: var(--vscode-button-foreground);
-  border-color: transparent;
-  background: var(--vscode-button-background);
-}
-
-.toolbar button.primary:hover {
-  background: var(--vscode-button-hoverBackground);
-}
-
-.toolbar button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.toolbar select {
-  color: var(--vscode-dropdown-foreground);
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-  padding: 0 6px;
-}
-
-.toolbar #status {
-  margin-left: auto;
-  color: var(--label-color);
-  font-size: 12px;
-}
-
-.toolbar .copy-format {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--label-color);
-}
+/* Data grid — tokens, buttons, tables, popups and the modal shell come from base.css. */
 
 /* ---- WHERE / ORDER BY bar ---- */
 .querybar {
@@ -117,7 +6,7 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 8px var(--bar-pad-x);
+  padding: var(--bar-pad-y) var(--bar-pad-x);
   background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
@@ -149,25 +38,25 @@ body {
 .querybar input {
   flex: 1 1 auto;
   min-width: 0;
-  height: var(--ctl-h);
-  box-sizing: border-box;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: var(--ctl-radius);
-  padding: 0 var(--ctl-pad-x);
-  font-size: 12px;
-  font-family: var(--vscode-editor-font-family);
-}
-
-.querybar input:focus {
-  outline: none;
-  border-color: var(--vscode-focusBorder);
+  font-family: var(--font-code);
 }
 
 .querybar input::placeholder {
-  color: var(--vscode-input-placeholderForeground, var(--label-color));
   opacity: 0.55;
+}
+
+.toolbar .copy-format {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+}
+
+.toolbar #status {
+  margin-left: auto;
+  font-size: var(--fs-base);
+  color: var(--label-color);
 }
 
 .col-visibility {
@@ -179,7 +68,7 @@ body {
 #pendingDrawer {
   flex: 0 0 auto;
   border-top: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-editorWidget-background);
+  background: var(--surface);
 }
 
 #pendingHeader {
@@ -189,11 +78,11 @@ body {
   padding: 5px var(--bar-pad-x);
   cursor: pointer;
   user-select: none;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
 }
 
 #pendingHeader:hover {
@@ -212,32 +101,35 @@ body {
 }
 
 .pending-body {
-  margin: 0;
   max-height: 200px;
   overflow: auto;
   padding: 10px var(--bar-pad-x);
   background: var(--vscode-editor-background);
   border-top: 1px solid var(--vscode-panel-border);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre;
-  color: var(--vscode-foreground);
 }
 
+/* ---- Column visibility menu ---- */
 .col-menu {
   position: absolute;
   z-index: 8;
   top: calc(100% + 4px);
   right: 0;
   min-width: 180px;
-  max-height: 340px;
+  /* Grow with the viewport so a long column list shows without a needless scrollbar. */
+  max-height: calc(100vh - 110px);
   overflow-y: auto;
   padding: 6px;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.col-menu-tools {
+  position: sticky;
+  top: -6px;
+  display: flex;
+  gap: 4px;
+  margin: -6px -6px 4px;
+  padding: 6px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--vscode-panel-border);
 }
 
 .col-menu label {
@@ -246,7 +138,7 @@ body {
   gap: 8px;
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--fs-base);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -265,9 +157,9 @@ body {
 }
 
 .col-menu-type {
-  color: var(--vscode-descriptionForeground);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 11px;
+  color: var(--label-color);
+  font-family: var(--font-code);
+  font-size: var(--fs-sm);
 }
 
 .col-menu label:focus-within .col-menu-type {
@@ -284,27 +176,17 @@ body {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
+  gap: 8px;
+  padding: var(--bar-pad-y) var(--bar-pad-x);
   border-top: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-editorWidget-background);
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
+  background: var(--surface);
+  font-size: var(--fs-base);
+  color: var(--label-color);
 }
 
 #pager button {
-  cursor: pointer;
-  border: none;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  border-radius: 4px;
-  padding: 2px 9px;
-  font-size: 12px;
-}
-
-#pager button:disabled {
-  opacity: 0.4;
-  cursor: default;
+  min-width: var(--ctl-h);
+  padding: 0 8px;
 }
 
 #pager #pagerInfo {
@@ -319,30 +201,8 @@ body {
   gap: 6px;
 }
 
-#pager #pageSize {
+#pager select {
   width: 70px;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 12px;
-}
-
-/* ---- Notice ---- */
-.notice {
-  flex: 0 0 auto;
-  padding: 8px 20px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
-}
-
-.notice.error {
-  color: var(--vscode-errorForeground);
-}
-
-.notice:empty {
-  display: none;
 }
 
 /* ---- Grid ---- */
@@ -352,29 +212,19 @@ body {
 }
 
 table {
-  border-collapse: collapse;
   table-layout: fixed;
-  font-size: 13px;
 }
 
+/* Cell padding lives on the inputs inside the cells, so the editor fills the cell. */
 th,
 td {
-  border-bottom: 1px solid var(--vscode-panel-border);
-  border-right: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
-  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   padding: 0;
 }
 
 th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
   padding: var(--cell-py) var(--cell-px);
-  background: var(--vscode-editorWidget-background);
-  font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
 /* The header content is flex INSIDE the cell; the th itself must stay a table-cell. */
@@ -387,6 +237,27 @@ th {
 .pk-key {
   order: 1;
   font-size: 10px;
+}
+
+/* FK / index glyph next to the column name. */
+.col-badge {
+  order: 1;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--label-color);
+  opacity: 0.75;
+}
+
+.col-badge svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.fk-badge {
+  color: var(--vscode-symbolIcon-keyForeground, var(--vscode-charts-blue, #4e94ce));
+  opacity: 0.9;
 }
 
 .th-label {
@@ -408,7 +279,7 @@ th {
   padding: 0 2px;
   border: none;
   background: transparent;
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
   font-size: 10px;
   line-height: 1;
   cursor: pointer;
@@ -417,6 +288,14 @@ th {
 
 .filter-btn {
   order: 2;
+  display: inline-flex;
+  align-items: center;
+}
+
+.filter-btn svg {
+  width: 11px;
+  height: 11px;
+  display: block;
 }
 
 .sort-btn {
@@ -446,25 +325,22 @@ th:hover .sort-btn,
   flex-direction: column;
   padding: 6px;
   gap: 6px;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .filter-pop-title {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-base);
 }
 
-.filter-pop-search {
+.filter-pop-search,
+.enum-pop-search {
   width: 100%;
   box-sizing: border-box;
   padding: 3px 6px;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .filter-pop-list {
@@ -474,16 +350,8 @@ th:hover .sort-btn,
 }
 
 .filter-pop-row {
-  display: flex;
-  align-items: center;
   gap: 6px;
   padding: 2px 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.filter-pop-row:hover {
-  background: var(--vscode-list-hoverBackground);
 }
 
 .filter-pop-value {
@@ -494,13 +362,21 @@ th:hover .sort-btn,
 }
 
 .filter-pop-count {
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
   font-variant-numeric: tabular-nums;
 }
 
-.filter-pop-clear {
-  align-self: flex-start;
-  cursor: pointer;
+.filter-pop-bulk {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
+}
+
+.filter-pop-footer {
+  display: flex;
+  padding-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
 }
 
 /* Drop indicator while dragging a header to reorder columns. */
@@ -551,24 +427,32 @@ td.has-nav .nav-btn:hover {
   z-index: 30;
   min-width: 180px;
   padding: 4px;
-  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
-  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
+  background: var(--vscode-menu-background, var(--surface));
+  border-color: var(--vscode-menu-border, var(--vscode-panel-border));
 }
 
 .cell-menu-item {
-  text-align: left;
   padding: 5px 10px;
-  border: none;
-  background: transparent;
   color: var(--vscode-menu-foreground, var(--vscode-foreground));
-  cursor: pointer;
-  font-size: 12px;
-  border-radius: 3px;
-  white-space: nowrap;
+}
+
+.cell-menu-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--label-color);
+}
+
+.cell-menu-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.cell-menu-item:hover .cell-menu-icon {
+  color: inherit;
 }
 
 .cell-menu-item:hover {
@@ -599,8 +483,8 @@ td input {
   background: transparent;
   padding: var(--cell-py) var(--cell-px);
   color: var(--vscode-foreground);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 13px;
+  font-family: var(--font-code);
+  font-size: var(--fs-md);
 }
 
 td input:read-only {
@@ -618,7 +502,7 @@ td input:not(:read-only) {
 td input.null,
 td input.generated {
   font-style: italic;
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
 }
 
 td input.generated {
@@ -634,7 +518,8 @@ td.focused {
   outline-offset: -2px;
 }
 
-.cell-select {
+/* Enum cell: a select-looking trigger that opens the searchable dropdown, with a ▾ caret. */
+.cell-enum {
   width: 100%;
   box-sizing: border-box;
   border: none;
@@ -642,20 +527,116 @@ td.focused {
   background: transparent;
   color: var(--vscode-foreground);
   padding: var(--cell-py) var(--cell-px);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 13px;
+  padding-right: 18px;
+  font-family: var(--font-code);
+  font-size: var(--fs-md);
+  text-align: left;
   cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ---- Rows ---- */
-tbody tr:nth-child(even) td {
-  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 35%, transparent);
+.cell-enum::after {
+  content: '▾';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  opacity: 0.6;
 }
 
-tbody tr:hover td {
+.cell-enum.null {
+  color: var(--label-color);
+  font-style: italic;
+}
+
+/* Searchable enum dropdown. */
+.enum-pop {
+  position: fixed;
+  z-index: 30;
+  max-width: 320px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 4px;
+}
+
+.enum-pop-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Keep each row at its natural height; without this, a long list is flex-shrunk into unreadable slivers. */
+.enum-pop-list > * {
+  flex: 0 0 auto;
+}
+
+.enum-pop-row {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.enum-pop-row:hover,
+.enum-pop-row:focus {
+  outline: none;
   background: var(--vscode-list-hoverBackground);
 }
 
+.enum-pop-row.selected {
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 55%, transparent);
+}
+
+.enum-pop-row.null {
+  color: var(--label-color);
+  font-style: italic;
+}
+
+.enum-pop-more {
+  padding: 4px 8px;
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+}
+
+/* Foreign-key picker: descriptive label on top, raw key underneath. */
+.fk-pop {
+  max-width: 460px;
+}
+
+.fk-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+}
+
+.fk-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fk-key {
+  font-family: var(--font-code);
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* When there is no label, the key is the only line, so keep it at normal weight/colour. */
+.fk-key-only {
+  font-size: var(--fs-base);
+  color: var(--vscode-foreground);
+}
+
+/* ---- Row states ---- */
 td.dirty {
   background: var(--vscode-diffEditor-insertedTextBackground, rgba(78, 201, 78, 0.18)) !important;
 }
@@ -682,17 +663,40 @@ td.actions {
   overflow: visible;
 }
 
+.row-num {
+  color: var(--label-color);
+  font-size: var(--fs-sm);
+  opacity: 0.6;
+  user-select: none;
+}
+
+th.gutter {
+  text-align: center;
+  color: var(--label-color);
+  font-weight: normal;
+}
+
 td.actions button {
   cursor: pointer;
   border: none;
   background: transparent;
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
   font-size: 14px;
   padding: 2px 6px;
   opacity: 0.5;
 }
 
-tr:hover td.actions button {
+/* On rows that can be deleted, the line number gives way to the × button on hover. */
+td.actions--deletable button {
+  display: none;
+}
+
+tr:hover td.actions--deletable .row-num {
+  display: none;
+}
+
+tr:hover td.actions--deletable button {
+  display: inline;
   opacity: 1;
 }
 
@@ -704,10 +708,10 @@ td.actions button:hover {
 tfoot td.add-row {
   border-right: none;
   padding: var(--cell-py) var(--cell-px);
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
   cursor: pointer;
   user-select: none;
-  font-size: 12px;
+  font-size: var(--fs-base);
 }
 
 tfoot td.add-row:hover {
@@ -722,7 +726,7 @@ tfoot td.add-row.disabled {
 
 tfoot td.add-row.disabled:hover {
   background: transparent;
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
 }
 
 /* ---- While dragging a column edge ---- */
@@ -736,46 +740,9 @@ body.resizing input {
 }
 
 /* ---- JSON modal ---- */
-.modal {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 10;
-}
-
-.modal[hidden] {
-  display: none;
-}
-
-.modal-box {
-  width: min(760px, 92vw);
-  max-height: 82vh;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
-  border-radius: 8px;
-}
-
-.modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-title {
-  font-weight: 600;
-  font-size: 14px;
-}
-
 .json-status {
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
+  font-size: var(--fs-base);
+  color: var(--label-color);
 }
 
 .json-status.ok {
@@ -786,10 +753,6 @@ body.resizing input {
   color: var(--vscode-errorForeground);
 }
 
-.modal-spacer {
-  flex: 1;
-}
-
 #jsonModalText {
   flex: 1;
   min-height: 320px;
@@ -798,47 +761,18 @@ body.resizing input {
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 4px;
-  font-family: var(--vscode-editor-font-family);
-  font-size: 13px;
+  border-radius: var(--ctl-radius);
+  font-family: var(--font-code);
+  font-size: var(--fs-md);
 }
 
 #jsonModalText:focus {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: none;
+  border-color: var(--vscode-focusBorder);
 }
 
 .modal-error {
   color: var(--vscode-errorForeground);
-  font-size: 12px;
+  font-size: var(--fs-base);
   min-height: 16px;
-}
-
-.modal-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.modal-spacer {
-  flex: 1 1 auto;
-}
-
-.modal-actions button {
-  cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--vscode-foreground) 22%, transparent);
-  padding: 6px 18px;
-  border-radius: 4px;
-  font-size: 13px;
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-}
-
-.modal-actions button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-
-.modal-actions button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }

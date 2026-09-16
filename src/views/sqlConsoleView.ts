@@ -147,6 +147,7 @@ export class SqlConsoleView {
 
   private renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'console.js'));
+    const baseStyleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'base.css'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'console.css'));
     const nonce = buildNonce();
     return `<!DOCTYPE html>
@@ -154,9 +155,10 @@ export class SqlConsoleView {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+<link href="${baseStyleUri}" rel="stylesheet">
 <link href="${styleUri}" rel="stylesheet">
 </head>
-<body>
+<body class="stacked">
   <div class="toolbar">
     <button id="run" class="primary">Run ▷</button>
     <button id="historyToggle" title="Recent queries">History ⌄</button>

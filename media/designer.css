@@ -1,116 +1,43 @@
-html,
-body {
-  height: 100%;
-}
+/* Table designer — tokens, buttons, tables and bars come from base.css. */
 
-body {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  font-family: var(--vscode-font-family);
-  color: var(--vscode-foreground);
-  background: var(--vscode-editor-background);
-}
-
-.bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  background: var(--vscode-editorWidget-background);
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-.bar label {
+.toolbar label {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
-}
-
-.spacer {
-  flex: 1;
-}
-
-.bar input {
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 13px;
-}
-
-.bar button,
-#addColumn {
-  cursor: pointer;
-  border: 1px solid var(--vscode-panel-border);
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border-radius: 4px;
-  padding: 5px 16px;
-  font-size: 12px;
-}
-
-.bar button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-  border-color: var(--vscode-button-background);
-}
-
-.bar button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.notice {
-  padding: 6px 20px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
-}
-
-.notice.error {
-  color: var(--vscode-errorForeground);
-}
-
-.notice:empty {
-  display: none;
+  font-size: var(--fs-base);
+  color: var(--label-color);
 }
 
 #content {
   flex: 1 1 auto;
   overflow: auto;
-  padding: 16px 20px;
+  padding: 16px var(--bar-pad-x);
 }
 
 .section-title {
-  margin: 24px 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  margin: 24px 0 8px;
+}
+
+/* Every table here describes a schema, so its headers are labels, not data. */
+thead th {
+  color: var(--label-color);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--vscode-descriptionForeground);
 }
 
 table {
-  border-collapse: collapse;
-  font-size: 13px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
+/* Cell padding lives on the inputs so a field fills its cell edge to edge. */
 th,
 td {
-  border-bottom: 1px solid var(--vscode-panel-border);
-  text-align: left;
   padding: 0;
 }
 
 th {
-  padding: 6px 10px;
-  font-weight: 600;
-  color: var(--vscode-descriptionForeground);
+  padding: 7px 10px;
 }
 
 td input[type='text'],
@@ -123,9 +50,9 @@ td select {
   outline: none;
   background: transparent;
   color: var(--vscode-foreground);
-  padding: 6px 10px;
-  font-family: var(--vscode-editor-font-family);
-  font-size: 13px;
+  padding: 7px 10px;
+  font-family: var(--font-code);
+  font-size: var(--fs-md);
 }
 
 td select {
@@ -147,18 +74,19 @@ td.check {
   text-align: center;
 }
 
+/* Multi-select column picker inside a cell. */
 td select.multi {
   width: 100%;
   min-width: 150px;
   box-sizing: border-box;
   margin: 4px 0;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 4px;
+  border-radius: var(--ctl-radius);
   background: var(--vscode-input-background);
   color: var(--vscode-foreground);
   padding: 2px;
-  font-size: 12px;
-  font-family: var(--vscode-editor-font-family);
+  font-size: var(--fs-base);
+  font-family: var(--font-code);
 }
 
 td select.multi option {
@@ -171,21 +99,6 @@ td select.multi option:checked {
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-tbody tr:hover td {
-  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 55%, transparent);
-}
-
-table {
-  width: 100%;
-}
-
-th {
-  background: var(--vscode-editorWidget-background);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 11px;
-}
-
 td.actions {
   text-align: center;
 }
@@ -194,9 +107,13 @@ td.actions button {
   cursor: pointer;
   border: none;
   background: transparent;
-  color: var(--vscode-descriptionForeground);
+  color: var(--label-color);
   font-size: 14px;
   padding: 2px 8px;
+}
+
+td.actions button:hover {
+  color: var(--vscode-errorForeground);
 }
 
 tr.dropped td {
@@ -204,34 +121,25 @@ tr.dropped td {
   opacity: 0.5;
 }
 
-#addColumn {
-  color: var(--vscode-descriptionForeground);
-}
-
+/* ---- Generated SQL preview ---- */
 #sqlPane {
   margin-top: 18px;
   border: 1px solid var(--vscode-panel-border);
-  border-radius: 6px;
+  border-radius: var(--pop-radius);
   overflow: hidden;
 }
 
 .sql-title {
   padding: 6px 12px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--vscode-descriptionForeground);
-  background: var(--vscode-editorWidget-background);
+  color: var(--label-color);
+  background: var(--surface);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
 .sql {
-  margin: 0;
   padding: 12px;
-  background: var(--vscode-textCodeBlock-background, var(--vscode-editorWidget-background));
-  color: var(--vscode-foreground);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
-  white-space: pre-wrap;
 }

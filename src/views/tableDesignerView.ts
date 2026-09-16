@@ -200,6 +200,7 @@ export class TableDesignerView {
 
   private renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'designer.js'));
+    const baseStyleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'base.css'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'designer.css'));
     const nonce = buildNonce();
     return `<!DOCTYPE html>
@@ -207,10 +208,11 @@ export class TableDesignerView {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+<link href="${baseStyleUri}" rel="stylesheet">
 <link href="${styleUri}" rel="stylesheet">
 </head>
-<body>
-  <div class="bar">
+<body class="stacked">
+  <div class="toolbar">
     <label id="tableNameWrap">Table name <input id="tableName" spellcheck="false"></label>
     <span class="spacer"></span>
     <button id="apply" class="primary" disabled>Apply</button>
@@ -225,7 +227,7 @@ export class TableDesignerView {
       </thead>
       <tbody id="columnsBody"></tbody>
     </table>
-    <button id="addColumn">+ Add column</button>
+    <button id="addColumn" class="btn btn-sm">+ Add column</button>
 
     <div class="section-title">Indexes</div>
     <table id="indexes">
@@ -234,7 +236,7 @@ export class TableDesignerView {
       </thead>
       <tbody id="indexesBody"></tbody>
     </table>
-    <button id="addIndex">+ Add index</button>
+    <button id="addIndex" class="btn btn-sm">+ Add index</button>
 
     <div class="section-title">Foreign keys</div>
     <table id="fks">
@@ -243,7 +245,7 @@ export class TableDesignerView {
       </thead>
       <tbody id="fksBody"></tbody>
     </table>
-    <button id="addFk">+ Add foreign key</button>
+    <button id="addFk" class="btn btn-sm">+ Add foreign key</button>
 
     <div id="sqlPane">
       <div class="sql-title">Generated SQL</div>

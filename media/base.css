@@ -1,0 +1,497 @@
+/* ============================================================================
+   DB Studio — shared foundation for every webview (grid, console, designer,
+   connection form, results). Loaded before the per-view stylesheet, which then
+   only carries what is genuinely specific to that view.
+
+   Colours are always derived from the VSCode theme variables, never hardcoded,
+   so the panels follow whatever theme the editor is on.
+   ========================================================================= */
+
+:root {
+  /* ---- Controls: one height, one radius, one padding for every button,
+     input and select across all views. ---- */
+  --ctl-h: 28px;
+  --ctl-h-sm: 24px;
+  --ctl-radius: 5px;
+  --ctl-pad-x: 10px;
+
+  /* ---- Bars (toolbars, pagers, footers) ---- */
+  --bar-pad-x: 16px;
+  --bar-pad-y: 8px;
+
+  /* ---- Table cells ---- */
+  --cell-px: 16px;
+  --cell-py: 11px;
+
+  /* ---- Floating surfaces ---- */
+  --pop-radius: 6px;
+  --pop-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --modal-radius: 8px;
+
+  /* ---- Derived neutrals: a single tint scale so a control reads the same in
+     light and dark themes without a per-theme override. ---- */
+  --tint-rest: color-mix(in srgb, var(--vscode-foreground) 7%, var(--vscode-editorWidget-background));
+  --tint-hover: color-mix(in srgb, var(--vscode-foreground) 14%, var(--vscode-editorWidget-background));
+  --edge-rest: color-mix(in srgb, var(--vscode-foreground) 24%, transparent);
+  --edge-hover: color-mix(in srgb, var(--vscode-foreground) 42%, transparent);
+  /* Inner table rules, lighter than the outer panel borders. */
+  --hairline: color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+
+  --surface: var(--vscode-editorWidget-background);
+  --label-color: var(--vscode-descriptionForeground);
+
+  --font-ui: var(--vscode-font-family);
+  --font-code: var(--vscode-editor-font-family);
+  --fs-sm: 11px;
+  --fs-base: 12px;
+  --fs-md: 13px;
+}
+
+/* `hidden` must always win over class-level display rules (flex/grid/block). */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+
+/* Views that stack a toolbar, a scrolling body and a footer. */
+body.stacked {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------- Bars ---- */
+
+.toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--bar-pad-y) var(--bar-pad-x);
+  background: var(--surface);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+/* Pushed-apart groups on a bar. */
+.spacer {
+  flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------------ Buttons ---- */
+/* One base look + modifier classes. The selector list names every container
+   whose bare `<button>` is a real control, so icon-only affordances inside
+   cells and menus keep their own compact styling. */
+
+.btn,
+.toolbar button,
+#pager button,
+.edit-bar button,
+.history-tools button,
+.modal-actions button,
+.form-actions button,
+.edit-sql-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--ctl-h);
+  box-sizing: border-box;
+  padding: 0 12px;
+  border-radius: var(--ctl-radius);
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  cursor: pointer;
+  color: var(--vscode-foreground);
+  background: var(--tint-rest);
+  border: 1px solid var(--edge-rest);
+  transition: background 80ms ease, border-color 80ms ease;
+}
+
+.btn:hover:not(:disabled),
+.toolbar button:hover:not(:disabled),
+#pager button:hover:not(:disabled),
+.edit-bar button:hover:not(:disabled),
+.history-tools button:hover:not(:disabled),
+.modal-actions button:hover:not(:disabled),
+.form-actions button:hover:not(:disabled),
+.edit-sql-toggle:hover:not(:disabled) {
+  background: var(--tint-hover);
+  border-color: var(--edge-hover);
+}
+
+.btn:disabled,
+.toolbar button:disabled,
+#pager button:disabled,
+.edit-bar button:disabled,
+.history-tools button:disabled,
+.modal-actions button:disabled,
+.form-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn svg,
+.toolbar button svg,
+.edit-bar button svg,
+.form-actions button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+/* Accent / confirm. Exactly one per bar: the action the view exists for. */
+.btn-primary,
+.toolbar button.primary,
+.edit-bar button.primary,
+.modal-actions button.primary,
+.form-actions button.primary {
+  color: var(--vscode-button-foreground);
+  border-color: transparent;
+  background: var(--vscode-button-background);
+}
+
+.btn-primary:hover:not(:disabled),
+.toolbar button.primary:hover:not(:disabled),
+.edit-bar button.primary:hover:not(:disabled),
+.modal-actions button.primary:hover:not(:disabled),
+.form-actions button.primary:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+/* Pressed state for buttons that toggle a panel open. */
+.btn-toggle.active,
+.toolbar button.active {
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
+}
+
+/* Borderless, for dense inline actions. */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  border-color: transparent;
+}
+
+/* Destructive action — turns red on hover rather than shouting at rest. */
+.btn-danger:hover:not(:disabled),
+.history-clear:hover:not(:disabled) {
+  color: var(--vscode-errorForeground);
+  border-color: var(--vscode-errorForeground);
+}
+
+/* Compact size for popups and toolbars-within-panels. */
+.btn-sm,
+.history-tools button,
+.edit-sql-toggle {
+  height: var(--ctl-h-sm);
+  padding: 0 8px;
+  gap: 4px;
+  font-size: var(--fs-sm);
+}
+
+.btn-sm svg,
+.history-tools button svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Icon-only: square rather than pill-shaped. */
+.btn-icon,
+.toolbar button.icon-only {
+  padding: 0 8px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ------------------------------------------------- Inputs and selects ---- */
+
+.field,
+.toolbar input[type='text'],
+.toolbar input:not([type]),
+.querybar input {
+  height: var(--ctl-h);
+  box-sizing: border-box;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: var(--ctl-radius);
+  padding: 0 var(--ctl-pad-x);
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+}
+
+.field:focus,
+.toolbar input:focus,
+.querybar input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--label-color));
+}
+
+.toolbar select,
+#pager select,
+.select {
+  height: var(--ctl-h);
+  box-sizing: border-box;
+  cursor: pointer;
+  border-radius: var(--ctl-radius);
+  padding: 0 6px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+}
+
+/* ------------------------------------------------------------ Labels ---- */
+
+/* Small uppercase heading above a group of fields or a table. */
+.section-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--label-color);
+}
+
+/* Inline label sitting next to a control on a bar. */
+.bar-label {
+  flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+}
+
+/* --------------------------------------------------- Status / notices ---- */
+
+/* One-line status strip inside a view. */
+.notice {
+  flex: 0 0 auto;
+  padding: var(--bar-pad-y) var(--bar-pad-x);
+  font-size: var(--fs-base);
+  color: var(--label-color);
+}
+
+.notice.error {
+  color: var(--vscode-errorForeground);
+}
+
+.notice:empty {
+  display: none;
+}
+
+/* Boxed result banner with a leading glyph (connection test, validation). */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: var(--ctl-radius);
+  font-size: var(--fs-base);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.banner:empty {
+  display: none;
+}
+
+.banner::before {
+  flex: none;
+  font-size: var(--fs-md);
+  line-height: 1.3;
+}
+
+.banner.pending {
+  color: var(--label-color);
+  background: var(--surface);
+}
+
+.banner.pending::before {
+  content: '⋯';
+}
+
+.banner.ok {
+  color: var(--vscode-testing-iconPassed, #4ec94e);
+  background: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ec94e) 12%, transparent);
+  border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ec94e) 35%, transparent);
+}
+
+.banner.ok::before {
+  content: '✓';
+}
+
+.banner.error {
+  color: var(--vscode-errorForeground);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 12%, transparent);
+  border-color: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 35%, transparent);
+}
+
+.banner.error::before {
+  content: '✕';
+}
+
+/* ------------------------------------------------------------ Tables ---- */
+/* Only what every data table shares. Cell padding stays per-view: the grid
+   puts it on the inputs inside the cells, the read-only tables on the cells. */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--fs-md);
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid var(--hairline);
+  text-align: left;
+}
+
+/* Data headers carry column names, so they keep the identifier's own casing. */
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Headers that are labels rather than data ("Name", "Type", "Null"…). */
+.labelled-head th {
+  color: var(--label-color);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 35%, transparent);
+}
+
+tbody tr:hover td {
+  background: var(--vscode-list-hoverBackground);
+}
+
+td.null {
+  color: var(--label-color);
+  font-style: italic;
+}
+
+/* -------------------------------------------------- Floating surfaces ---- */
+
+.popup,
+.col-menu,
+.filter-pop,
+.enum-pop,
+.cell-menu,
+.autocomplete {
+  background: var(--surface);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--pop-radius);
+  box-shadow: var(--pop-shadow);
+}
+
+/* A row inside a popup or context menu. */
+.popup-row,
+.cell-menu-item,
+.filter-pop-row,
+.enum-pop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-size: var(--fs-base);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.popup-row:hover,
+.filter-pop-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* ------------------------------------------------------------- Modal ---- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(760px, 92vw);
+  max-height: 82vh;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: var(--modal-radius);
+  box-shadow: var(--pop-shadow);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-spacer {
+  flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------- Code text ---- */
+
+/* Read-only SQL preview (pending changes, generated DDL, commit preview). */
+.code {
+  margin: 0;
+  font-family: var(--font-code);
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--vscode-foreground);
+  background: var(--vscode-textCodeBlock-background, var(--surface));
+}

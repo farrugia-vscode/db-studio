@@ -331,6 +331,7 @@ const ICONS = {
 
 function renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'grid.js'));
+  const baseStyleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'base.css'));
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'grid.css'));
   const nonce = buildNonce();
   return `<!DOCTYPE html>
@@ -338,9 +339,10 @@ function renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+<link href="${baseStyleUri}" rel="stylesheet">
 <link href="${styleUri}" rel="stylesheet">
 </head>
-<body>
+<body class="stacked">
   <div class="toolbar">
     <button id="commit" class="primary" hidden>${ICONS.commit}Commit</button>
     <button id="revert" hidden title="Discard pending changes">${ICONS.revert}Revert</button>
