@@ -16,6 +16,11 @@
       { label: "Date & time", types: ["date", "timestamp", "timestamptz", "time"] },
       { label: "Boolean", types: ["boolean"] },
       { label: "Binary", types: ["bytea"] }
+    ],
+    sqlite: [
+      { label: "Numeric", types: ["INTEGER", "REAL", "NUMERIC"] },
+      { label: "Text", types: ["TEXT"] },
+      { label: "Binary", types: ["BLOB"] }
     ]
   };
   function flatTypes(kind) {
