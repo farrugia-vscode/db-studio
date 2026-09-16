@@ -62,6 +62,8 @@ const notice = element<HTMLDivElement>('notice');
 const status = element<HTMLSpanElement>('status');
 const commitButton = element<HTMLButtonElement>('commit');
 const revertButton = element<HTMLButtonElement>('revert');
+const undoButton = element<HTMLButtonElement>('undo');
+const redoButton = element<HTMLButtonElement>('redo');
 const pendingDrawer = element<HTMLDivElement>('pendingDrawer');
 const pendingHeader = element<HTMLDivElement>('pendingHeader');
 const pendingChevron = element<HTMLSpanElement>('pendingChevron');
@@ -104,6 +106,8 @@ let redoStack: RowModel[][] = [];
 
 commitButton.addEventListener('click', commit);
 revertButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
+undoButton.addEventListener('click', undo);
+redoButton.addEventListener('click', redo);
 // The pending drawer rolls up/down like the terminal panel.
 pendingHeader.addEventListener('click', () => setPendingExpanded(!pendingExpanded));
 
@@ -2011,6 +2015,8 @@ function refreshPending(): void {
     requestEditsPreview();
   }
   status.textContent = count === 0 && dirty ? 'unsaved changes' : '';
+  undoButton.disabled = undoStack.length === 0;
+  redoButton.disabled = redoStack.length === 0;
 }
 
 function hasLocalChanges(): boolean {

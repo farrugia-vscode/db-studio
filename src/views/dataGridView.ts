@@ -370,6 +370,8 @@ const ICONS = {
   columns: icon('<rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M6.2 3v10M9.8 3v10"/>'),
   export: icon('<path d="M8 2.5v7"/><path d="M4.5 6 8 9.5 11.5 6"/><path d="M3 12.5h10"/>'),
   reload: icon('<path d="M12.8 8a4.8 4.8 0 1 1-1.4-3.4"/><path d="M13 3v2.6h-2.6"/>'),
+  undo: icon('<path d="M3 8h7a3.2 3.2 0 0 1 0 6.4H7"/><path d="M6 5 3 8l3 3"/>'),
+  redo: icon('<path d="M13 8H6a3.2 3.2 0 0 0 0 6.4h3"/><path d="M10 5l3 3-3 3"/>'),
 };
 
 function renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
@@ -389,6 +391,8 @@ function renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
   <div class="toolbar">
     <button id="commit" class="primary" hidden>${ICONS.commit}Commit</button>
     <button id="revert" hidden title="Discard pending changes">${ICONS.revert}Revert</button>
+    <button id="undo" class="icon-only" title="Undo (Ctrl+Z)" disabled>${ICONS.undo}</button>
+    <button id="redo" class="icon-only" title="Redo (Ctrl+Y)" disabled>${ICONS.redo}</button>
     <span id="status"></span>
     <span class="col-visibility">
       <button id="colMenuToggle" title="Show / hide columns">${ICONS.columns}Columns</button>
