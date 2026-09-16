@@ -409,6 +409,34 @@ function applyBulkEdit(rect: { r1: number; r2: number; c1: number; c2: number },
   refreshPending();
 }
 
+// Live mirror of the lead cell's value into every editable cell of `rect` while typing.
+// Updates each cell's model, its display input and null/dirty state without a full re-render
+// (which would drop focus). The blur handler still normalizes via applyBulkEdit.
+function propagateBulkLive(rect: { r1: number; r2: number; c1: number; c2: number }, raw: string): void {
+  for (let r = rect.r1; r <= rect.r2; r += 1) {
+    const model = rowModels[r];
+    if (!model) {
+      continue;
+    }
+    for (let c = rect.c1; c <= rect.c2; c += 1) {
+      const column = renderColumns[c];
+      if (!column || !isCellEditable(model, column) || !isPlainTextColumn(column)) {
+        continue;
+      }
+      setCellValue(model, column, raw);
+      const cell = grid.querySelector<HTMLTableCellElement>(`td[data-r="${r}"][data-c="${c}"]`);
+      const input = cell?.querySelector('input');
+      if (input instanceof HTMLInputElement && input !== document.activeElement) {
+        input.value = raw;
+        input.classList.toggle('null', model.values[column.name] === null);
+      }
+      if (cell) {
+        applyCellState(cell, model, column);
+      }
+    }
+  }
+}
+
 function isCellEditable(model: RowModel, column: ColumnMeta): boolean {
   const isGenerated = column.isAutoIncrement && model.original === null;
   return hasPrimaryKey && !isGenerated;
@@ -1363,6 +1391,11 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     model.values[column.name] = dateType ? fromDateInputValue(input, column, dateType) : readInput(input, column);
     input.classList.toggle('null', model.values[column.name] === null);
     applyCellState(cell, model, column);
+    // Multi-cell selection: mirror the lead cell into every selected cell live, so the whole
+    // region visibly edits together instead of only committing on blur.
+    if (bulkRect) {
+      propagateBulkLive(bulkRect, input.value);
+    }
     refreshPending();
   });
   input.addEventListener('focus', () => cell.classList.add('focused'));
