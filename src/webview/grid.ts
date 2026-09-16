@@ -32,6 +32,8 @@ let pkColumns: string[] = [];
 let namespace = '';
 let foreignKeys: ForeignKeyMeta[] = [];
 let incomingForeignKeys: IncomingForeignKey[] = [];
+// Read-only connection → all editing is disabled (treated like a table with no primary key).
+let readOnly = false;
 let rowModels: RowModel[] = [];
 let hasPrimaryKey = false;
 let colElements: HTMLTableColElement[] = [];
@@ -610,6 +612,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
     namespace = message.namespace;
     foreignKeys = message.foreignKeys;
     incomingForeignKeys = message.incomingForeignKeys;
+    readOnly = message.readOnly;
     filterInput.value = message.filter;
     orderByInput.value = message.orderBy;
     loadData(message.columns, message.pkColumns, message.rows);
@@ -655,7 +658,8 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
   columns = nextColumns;
   columnOrder = nextColumns.map((column) => column.name);
   pkColumns = nextPkColumns;
-  hasPrimaryKey = nextPkColumns.length > 0;
+  // A read-only connection disables all editing, exactly like a table with no primary key.
+  hasPrimaryKey = nextPkColumns.length > 0 && !readOnly;
   rowModels = rows.map((row) => ({ values: toCellRow(row), original: toCellRow(row), deleted: false }));
   hiddenColumns.clear();
   columnFilters.clear();
@@ -663,7 +667,11 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
   undoStack = [];
   redoStack = [];
   notice.classList.remove('error');
-  notice.textContent = hasPrimaryKey ? '' : 'Read-only: this table has no primary key, rows cannot be edited safely.';
+  notice.textContent = readOnly
+    ? 'Read-only connection: editing is disabled.'
+    : hasPrimaryKey
+      ? ''
+      : 'Read-only: this table has no primary key, rows cannot be edited safely.';
   render();
   refreshPending();
 }

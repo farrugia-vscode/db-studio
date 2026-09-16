@@ -11,6 +11,7 @@ import { ExportService } from './views/exportService';
 import type { ExportFormat } from './domain/exportFormat';
 import { DDL_SCHEME, DdlContentProvider, buildDdlUri, buildObjectDdlUri } from './views/ddlContentProvider';
 import { SchemaNode } from './views/schemaNode';
+import { getConnectionIcon } from './views/connectionIcon';
 import { VISIBLE_PREFIX, VISIBLE_CONNECTIONS_KEY } from './views/schemaTreeProvider';
 
 let manager: ConnectionManager;
@@ -71,7 +72,9 @@ async function selectConnections(): Promise<void> {
   const stored = extensionContext.workspaceState.get<string[]>(VISIBLE_CONNECTIONS_KEY, []);
   const picked = await vscode.window.showQuickPick(
     connections.map((connection) => ({
-      label: connection.icon ? `${connection.icon} ${connection.name}` : connection.name,
+      label: connection.name,
+      iconPath: getConnectionIcon(connection),
+      description: `${connection.driver}`,
       connectionName: connection.name,
       picked: stored.length === 0 || stored.includes(connection.name),
     })),
@@ -97,6 +100,9 @@ async function dropDatabase(node?: SchemaNode): Promise<void> {
   if (!node || node.kind !== 'namespace' || !node.namespace) {
     return;
   }
+  if (blockedByReadOnly(node.connectionName)) {
+    return;
+  }
   const confirmed = await vscode.window.showWarningMessage(
     `Drop "${node.namespace}"? All its tables and data are removed — this cannot be undone.`,
     { modal: true },
@@ -117,7 +123,7 @@ async function dropDatabase(node?: SchemaNode): Promise<void> {
 
 async function createDatabase(node?: SchemaNode): Promise<void> {
   const name = node ? node.connectionName : await pickConnectionName();
-  if (!name) {
+  if (!name || blockedByReadOnly(name)) {
     return;
   }
   const dbName = await vscode.window.showInputBox({ prompt: 'New database / schema name', ignoreFocusOut: true });
@@ -135,14 +141,14 @@ async function createDatabase(node?: SchemaNode): Promise<void> {
 }
 
 async function createTable(node?: SchemaNode): Promise<void> {
-  if (!node || node.kind !== 'namespace' || !node.namespace) {
+  if (!node || node.kind !== 'namespace' || !node.namespace || blockedByReadOnly(node.connectionName)) {
     return;
   }
   await designerView.open({ connectionName: node.connectionName, namespace: node.namespace });
 }
 
 async function modifyTable(node?: SchemaNode): Promise<void> {
-  if (!node || node.kind !== 'table' || !node.namespace || !node.table) {
+  if (!node || node.kind !== 'table' || !node.namespace || !node.table || blockedByReadOnly(node.connectionName)) {
     return;
   }
   await designerView.open({ connectionName: node.connectionName, namespace: node.namespace, table: node.table });
@@ -356,6 +362,9 @@ async function runTableStatement(
   buildSql: (ref: string) => string,
   successMessage: string,
 ): Promise<void> {
+  if (blockedByReadOnly(node.connectionName)) {
+    return;
+  }
   try {
     const driver = await manager.getDriver(node.connectionName);
     const ref = driver.buildTableRef(node.namespace!, node.table!);
@@ -382,4 +391,13 @@ async function pickConnectionName(): Promise<string | undefined> {
 function reportError(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   vscode.window.showErrorMessage(`DB Studio: ${message}`);
+}
+
+// Guard for write actions: warns and returns true when the connection is marked read-only.
+function blockedByReadOnly(connectionName: string): boolean {
+  if (manager.getConnection(connectionName)?.isReadOnly) {
+    vscode.window.showWarningMessage(`DB Studio: "${connectionName}" is read-only; the action was blocked.`);
+    return true;
+  }
+  return false;
 }

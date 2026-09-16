@@ -1,8 +1,8 @@
 {
   "name": "db-studio",
   "displayName": "DB Studio",
-  "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL)",
-  "version": "0.0.13",
+  "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL, SQLite)",
+  "version": "0.0.18",
   "publisher": "farrugia",
   "icon": "icon.png",
   "engines": {
@@ -278,9 +278,7 @@
             "type": "object",
             "required": [
               "name",
-              "driver",
-              "host",
-              "user"
+              "driver"
             ],
             "properties": {
               "name": {
@@ -290,7 +288,8 @@
                 "type": "string",
                 "enum": [
                   "mysql",
-                  "postgres"
+                  "postgres",
+                  "sqlite"
                 ]
               },
               "host": {
@@ -304,6 +303,10 @@
               },
               "database": {
                 "type": "string"
+              },
+              "filePath": {
+                "type": "string",
+                "description": "Absolute path to the database file (SQLite only)."
               },
               "icon": {
                 "type": "string",
@@ -330,7 +333,7 @@
     "pg": "^8.13.0"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",
     "@types/vscode": "^1.85.0",
     "esbuild": "^0.23.0",

@@ -2,6 +2,7 @@ import type { DatabaseDriver } from '../domain/driver';
 import type { ConnectionConfig, DriverKind } from '../domain/types';
 import { MysqlDriver } from './mysqlDriver';
 import { PostgresDriver } from './postgresDriver';
+import { SqliteDriver } from './sqliteDriver';
 
 type DriverCreator = (config: ConnectionConfig, password: string) => DatabaseDriver;
 
@@ -13,6 +14,7 @@ export class DriverFactory {
   private readonly creators = new Map<DriverKind, DriverCreator>([
     ['mysql', (config, password) => new MysqlDriver(config, password)],
     ['postgres', (config, password) => new PostgresDriver(config, password)],
+    ['sqlite', (config) => new SqliteDriver(config)],
   ]);
 
   make(config: ConnectionConfig, password: string): DatabaseDriver {

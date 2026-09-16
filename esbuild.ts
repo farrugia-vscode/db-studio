@@ -8,7 +8,8 @@ const extensionConfig: esbuild.BuildOptions = {
   bundle: true,
   platform: 'node',
   format: 'cjs',
-  target: 'node18',
+  // node:sqlite ships with the VSCode runtime (Node 22.5+); no dependency, no native build.
+  target: 'node20',
   external: ['vscode', 'pg-native', 'cloudflare:sockets'],
   sourcemap: true,
   logLevel: 'info',

@@ -1,14 +1,20 @@
-export type DriverKind = 'mysql' | 'postgres';
+export type DriverKind = 'mysql' | 'postgres' | 'sqlite';
 
 export interface ConnectionConfig {
   name: string;
   driver: DriverKind;
-  host: string;
+  /** Server host. Unused by SQLite, which connects to {@link ConnectionConfig.filePath}. */
+  host?: string;
   port?: number;
-  user: string;
+  /** Server user. Unused by SQLite. */
+  user?: string;
   database?: string;
+  /** Absolute path to the database file (SQLite only). */
+  filePath?: string;
   /** Optional colored-dot emoji shown before the connection name in the tree (e.g. `🔵`). */
   icon?: string;
+  /** When true, the connection blocks every write (edits, commits, DDL). Undefined = writable. */
+  isReadOnly?: boolean;
 }
 
 export interface ColumnMeta {
@@ -107,10 +113,22 @@ export interface RoutineMeta {
 
 export type Row = Record<string, unknown>;
 
+/** Where a result column really comes from — lets the console tell which cells are safely editable. */
+export interface ColumnSource {
+  /** Output name (alias). */
+  name: string;
+  /** Real source table, or null for an expression/aggregate/computed column. */
+  sourceTable: string | null;
+  /** Real source column, or null when not a plain column reference. */
+  sourceColumn: string | null;
+}
+
 export interface QueryResult {
   columns: string[];
   rows: Row[];
   affectedRows?: number;
+  /** Per-column provenance when the driver can supply it (MySQL); absent → treat as read-only. */
+  fields?: ColumnSource[];
 }
 
 export interface SqlStatement {

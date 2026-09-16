@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
-import type { ColumnMeta, ForeignKeyMeta, IndexMeta, SchemaObjectKind } from '../domain/types';
+import type { ColumnMeta, ConnectionConfig, ForeignKeyMeta, IndexMeta, SchemaObjectKind } from '../domain/types';
 import { GroupKind, SchemaNode, TablePartKind } from './schemaNode';
+import { getConnectionIcon } from './connectionIcon';
 
 const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
 const None = vscode.TreeItemCollapsibleState.None;
@@ -60,10 +61,10 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
       .filter((connection) => visible.length === 0 || visible.includes(connection.name));
     return Promise.resolve(
       connections.map((connection) => {
-        const label = connection.icon ? `${connection.icon} ${connection.name}` : connection.name;
-        const node = new SchemaNode('connection', label, Collapsed, connection.name);
-        node.description = `${connection.driver} · ${connection.host}`;
-        node.iconPath = new vscode.ThemeIcon('database');
+        // The colour rides on the icon, so the label stays the bare connection name.
+        const node = new SchemaNode('connection', connection.name, Collapsed, connection.name);
+        node.description = `${connection.driver} · ${describeSource(connection)}`;
+        node.iconPath = getConnectionIcon(connection);
         return node;
       }),
     );
@@ -318,3 +319,12 @@ const OBJECT_ICONS: Record<SchemaObjectKind, string> = {
   trigger: 'zap',
   sequence: 'list-ordered',
 };
+
+/** What a connection points at: the database file for SQLite, the server host otherwise. */
+function describeSource(connection: ConnectionConfig): string {
+  if (connection.driver !== 'sqlite') {
+    return connection.host ?? '';
+  }
+  const filePath = connection.filePath ?? '';
+  return filePath.split('/').pop() ?? filePath;
+}

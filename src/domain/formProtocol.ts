@@ -15,7 +15,13 @@ export interface FormTestResultMessage {
   message: string;
 }
 
-export type ExtensionToForm = FormInitMessage | FormTestResultMessage;
+/** Path chosen in the native file picker, pushed back into the file field. */
+export interface FormFilePickedMessage {
+  type: 'filePicked';
+  filePath: string;
+}
+
+export type ExtensionToForm = FormInitMessage | FormTestResultMessage | FormFilePickedMessage;
 
 /** Messages sent from the connection form webview back to the extension host. */
 export interface FormReadyMessage {
@@ -40,4 +46,14 @@ export interface FormTestMessage {
   password: string;
 }
 
-export type FormToExtension = FormReadyMessage | FormSubmitMessage | FormCancelMessage | FormTestMessage;
+/** Asks the extension host to open the native file picker (SQLite only). */
+export interface FormBrowseMessage {
+  type: 'browse';
+}
+
+export type FormToExtension =
+  | FormReadyMessage
+  | FormSubmitMessage
+  | FormCancelMessage
+  | FormTestMessage
+  | FormBrowseMessage;

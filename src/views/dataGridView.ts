@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { EditFactory } from '../domain/edits/editFactory';
 import { QueryHistory } from './queryHistory';
+import { getConnectionIcon } from './connectionIcon';
 import type { ColumnMeta, Row } from '../domain/types';
 import type { CopyFormat, CopyMessage, ExportMessage, ExtensionToWebview, WebviewToExtension } from '../domain/gridProtocol';
 import type { EditDto } from '../domain/edits/edit';
@@ -52,14 +53,13 @@ export class DataGridView {
 
   private createPanel(target: TableTarget): vscode.WebviewPanel {
     const mediaUri = vscode.Uri.joinPath(this.context.extensionUri, 'media');
-    const icon = this.manager.getConnection(target.connectionName)?.icon;
-    const title = icon ? `${icon} ${target.table} · ${target.connectionName}` : `${target.table} · ${target.connectionName}`;
     const panel = vscode.window.createWebviewPanel(
       'dbStudio.dataGrid',
-      title,
+      `${target.table} · ${target.connectionName}`,
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [mediaUri] },
     );
+    panel.iconPath = getConnectionIcon(this.manager.getConnection(target.connectionName));
     panel.webview.html = renderHtml(panel.webview, mediaUri);
     return panel;
   }
@@ -267,6 +267,7 @@ class GridSession {
         pkColumns,
         foreignKeys,
         incomingForeignKeys,
+        readOnly: this.isReadOnly(),
         rows: result.rows.map((row) => normalizeRow(row, columns)),
         total,
         offset: this.offset,
@@ -280,7 +281,15 @@ class GridSession {
     }
   }
 
+  private isReadOnly(): boolean {
+    return this.manager.getConnection(this.target.connectionName)?.isReadOnly ?? false;
+  }
+
   private async commit(edits: ReturnType<typeof EditFactory.fromDto>[]): Promise<void> {
+    if (this.isReadOnly()) {
+      this.reportError(new Error('This connection is read-only; changes were not committed.'));
+      return;
+    }
     try {
       const driver = await this.manager.getDriver(this.target.connectionName);
       const ref = driver.buildTableRef(this.target.namespace, this.target.table);

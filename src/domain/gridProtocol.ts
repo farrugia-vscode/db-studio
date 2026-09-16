@@ -12,6 +12,8 @@ export interface GridDataMessage {
   foreignKeys: ForeignKeyMeta[];
   /** Foreign keys in other tables that point here (for reverse navigation). */
   incomingForeignKeys: IncomingForeignKey[];
+  /** When true, the connection is read-only: the grid disables all editing. */
+  readOnly: boolean;
   rows: Row[];
   /** Pagination: total matching rows, current window start and page size. */
   total: number;

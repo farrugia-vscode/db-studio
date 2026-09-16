@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
+import { getConnectionIcon } from './connectionIcon';
 import type { TableDesign, TableSchema } from '../domain/types';
 import type { DesignerToExtension, ExtensionToDesigner } from '../domain/designerProtocol';
 
@@ -35,6 +36,8 @@ export class TableDesignerView {
       this.createPanel();
     }
     this.panel!.title = target.table ? `Modify ${target.table}` : `New table · ${target.namespace}`;
+    // Set on every open, not just on creation: one panel is reused across connections.
+    this.panel!.iconPath = getConnectionIcon(this.manager.getConnection(target.connectionName));
     this.panel!.reveal();
     await this.postInit();
   }

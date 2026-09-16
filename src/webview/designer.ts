@@ -23,6 +23,11 @@ const TYPE_GROUPS: Record<DriverKind, Array<{ label: string; types: string[] }>>
     { label: 'Boolean', types: ['boolean'] },
     { label: 'Binary', types: ['bytea'] },
   ],
+  sqlite: [
+    { label: 'Numeric', types: ['INTEGER', 'REAL', 'NUMERIC'] },
+    { label: 'Text', types: ['TEXT'] },
+    { label: 'Binary', types: ['BLOB'] },
+  ],
 };
 
 function flatTypes(kind: DriverKind): string[] {

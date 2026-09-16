@@ -1,43 +1,79 @@
+/* Connection form — tokens, buttons and the banner come from base.css. */
+
 body {
-  font-family: var(--vscode-font-family);
-  color: var(--vscode-foreground);
-  padding: 16px;
+  padding: 24px 20px 32px;
+  overflow-y: auto;
 }
 
 form {
   display: flex;
   flex-direction: column;
+  gap: 20px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.form-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 4px;
+}
+
+.form-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.form-subtitle {
+  font-size: var(--fs-base);
+  color: var(--label-color);
+}
+
+/* A titled block of related fields, separated by a hairline rather than a box. */
+.section {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  max-width: 460px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vscode-panel-border);
 }
 
 label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
+  gap: 5px;
+  font-size: var(--fs-base);
+  color: var(--label-color);
 }
 
-input,
-select {
+/* Full-width stacked fields, unlike the inline controls base.css styles for bars. */
+form input,
+form select {
+  height: var(--ctl-h);
+  box-sizing: border-box;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, transparent);
-  padding: 5px 8px;
-  border-radius: 2px;
-  font-size: 13px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: var(--ctl-radius);
+  padding: 0 var(--ctl-pad-x);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
 }
 
-input:focus,
-select:focus {
-  outline: 1px solid var(--vscode-focusBorder);
+form input:focus,
+form select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
 }
 
-input:read-only {
+form input:read-only {
   opacity: 0.6;
 }
 
+/* ---- Engine picker ---- */
 .driver-picker {
   display: flex;
   gap: 8px;
@@ -46,27 +82,36 @@ input:read-only {
 .driver-option {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 5px;
   cursor: pointer;
-  padding: 6px 10px;
+  padding: 12px 8px;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 3px;
+  border-radius: var(--pop-radius);
   background: var(--vscode-input-background);
-  color: var(--vscode-foreground);
-  font-size: 13px;
+  color: var(--label-color);
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  transition: border-color 80ms ease, background 80ms ease;
+}
+
+.driver-option:hover {
+  border-color: var(--vscode-focusBorder);
 }
 
 .driver-option .ico {
-  font-size: 16px;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .driver-option.active {
   border-color: var(--vscode-focusBorder);
-  background: color-mix(in srgb, var(--vscode-focusBorder) 12%, var(--vscode-input-background));
+  color: var(--vscode-foreground);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 14%, var(--vscode-input-background));
 }
 
+/* ---- Field layout ---- */
 .row {
   display: flex;
   gap: 12px;
@@ -76,12 +121,9 @@ input:read-only {
   flex: 1;
 }
 
-.port {
-  width: 90px;
-}
-
+.port,
 .icon-field {
-  width: 90px;
+  width: 92px;
 }
 
 .icon-field select {
@@ -90,49 +132,102 @@ input:read-only {
   cursor: pointer;
 }
 
-.result {
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 3px;
-  margin-top: 4px;
-}
-
-.result:empty {
-  display: none;
-}
-
-.result.pending {
-  color: var(--vscode-descriptionForeground);
-  background: var(--vscode-editorWidget-background);
-}
-
-.result.ok {
-  color: var(--vscode-testing-iconPassed, #4ec94e);
-  background: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ec94e) 12%, transparent);
-}
-
-.result.error {
-  color: var(--vscode-errorForeground);
-  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 12%, transparent);
-}
-
-.actions {
+/* Text input plus a trailing button sharing one line. */
+.input-with-button {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
 }
 
-.actions button {
+.input-with-button input {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkbox-field {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--vscode-foreground);
   cursor: pointer;
-  border: none;
-  padding: 6px 16px;
-  border-radius: 2px;
-  font-size: 13px;
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
 }
 
-.actions button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
+.checkbox-field input {
+  height: auto;
+  margin: 1px 0 0;
+  padding: 0;
+  accent-color: var(--vscode-focusBorder);
 }
+
+.checkbox-hint {
+  display: block;
+  color: var(--label-color);
+}
+
+/* ---- Actions ---- */
+.form-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* Test sits apart on the left; the cancel/save pair closes the form on the right. */
+#test {
+  margin-right: auto;
+}
+
+/* ---- Colour picker: swatches use the exact hues of the tree / tab icons ---- */
+.color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vscode-foreground) 25%, transparent);
+  transition: transform 80ms ease, border-color 80ms ease;
+}
+
+.color-swatch:hover {
+  transform: scale(1.12);
+}
+
+.color-swatch.active {
+  border-color: var(--vscode-focusBorder);
+}
+
+/* "No colour" reads as an empty slot, not as another hue. */
+.swatch-none {
+  background: transparent;
+  position: relative;
+}
+
+.swatch-none::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1px),
+    var(--vscode-descriptionForeground) calc(50% - 1px),
+    var(--vscode-descriptionForeground) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
+
+.swatch-red { background: #e5484d; }
+.swatch-orange { background: #e07b39; }
+.swatch-yellow { background: #d6a400; }
+.swatch-green { background: #3fa95a; }
+.swatch-blue { background: #3b82d6; }
+.swatch-purple { background: #9061d9; }
+.swatch-brown { background: #9a6b4f; }
+.swatch-grey { background: #6b7280; }
+.swatch-white { background: #c9ccd1; }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { QueryHistory } from './queryHistory';
+import { getConnectionIcon } from './connectionIcon';
 import type { ExtensionToConsole, ConsoleToExtension } from '../domain/consoleProtocol';
 
 const STORAGE_PREFIX = 'dbStudio.console.';
@@ -41,6 +42,7 @@ export class SqlConsoleView {
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [mediaUri] },
     );
+    panel.iconPath = getConnectionIcon(this.manager.getConnection(connectionName));
     panel.webview.html = this.renderHtml(panel.webview, mediaUri);
     panel.webview.onDidReceiveMessage((message: ConsoleToExtension) => this.handleMessage(connectionName, panel, message));
     panel.onDidDispose(() => {
