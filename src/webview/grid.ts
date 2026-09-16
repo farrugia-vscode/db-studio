@@ -432,6 +432,34 @@ function cellInputAt(r: number, c: number): HTMLInputElement | null {
 // A checklist of every column; unchecking one hides it from the grid (session-only).
 function buildColMenu(): void {
   colMenu.replaceChildren();
+
+  // Bulk toggles pinned at the top — deselect all is the quick path to showing just one or two columns.
+  const setAll = (visible: boolean): void => {
+    for (const column of columns) {
+      if (visible) {
+        hiddenColumns.delete(column.name);
+      } else {
+        hiddenColumns.add(column.name);
+      }
+    }
+    for (const box of colMenu.querySelectorAll<HTMLInputElement>('input[type=checkbox]')) {
+      box.checked = visible;
+    }
+    render();
+  };
+  const tools = document.createElement('div');
+  tools.className = 'col-menu-tools';
+  const selectAll = document.createElement('button');
+  selectAll.className = 'btn btn-sm btn-ghost';
+  selectAll.textContent = 'Select all';
+  selectAll.addEventListener('click', () => setAll(true));
+  const deselectAll = document.createElement('button');
+  deselectAll.className = 'btn btn-sm btn-ghost';
+  deselectAll.textContent = 'Deselect all';
+  deselectAll.addEventListener('click', () => setAll(false));
+  tools.append(selectAll, deselectAll);
+  colMenu.appendChild(tools);
+
   for (const column of columns) {
     const label = document.createElement('label');
     const checkbox = document.createElement('input');
@@ -932,6 +960,8 @@ function openFilterPopup(column: ColumnMeta, anchor: HTMLElement): void {
   const list = document.createElement('div');
   list.className = 'filter-pop-list';
 
+  // Set by the footer once its button exists; keeps "Remove filter" enabled only when a filter is set.
+  let syncRemoveState = (): void => {};
   const apply = (): void => {
     const checked = [...list.querySelectorAll<HTMLInputElement>('input:checked')];
     if (checked.length === entries.length) {
@@ -939,6 +969,7 @@ function openFilterPopup(column: ColumnMeta, anchor: HTMLElement): void {
     } else {
       columnFilters.set(column.name, new Set(checked.map((box) => decodeValue(box.value))));
     }
+    syncRemoveState();
     render();
   };
 
@@ -968,16 +999,49 @@ function openFilterPopup(column: ColumnMeta, anchor: HTMLElement): void {
     }
   });
 
-  const clear = document.createElement('button');
-  clear.className = 'filter-pop-clear';
-  clear.textContent = 'Clear filter';
-  clear.addEventListener('click', () => {
+  // Check/uncheck every currently-visible value (respects the search box), then re-apply.
+  const setAllVisible = (checked: boolean): void => {
+    for (const row of list.querySelectorAll<HTMLLabelElement>('.filter-pop-row')) {
+      if (!row.hidden) {
+        const box = row.querySelector<HTMLInputElement>('input');
+        if (box) {
+          box.checked = checked;
+        }
+      }
+    }
+    apply();
+  };
+
+  // Bulk toggles — deselect all is the quick path to "keep just one or two values".
+  const bulk = document.createElement('div');
+  bulk.className = 'filter-pop-bulk';
+  const selectAll = document.createElement('button');
+  selectAll.className = 'btn btn-sm btn-ghost';
+  selectAll.textContent = 'Select all';
+  selectAll.addEventListener('click', () => setAllVisible(true));
+  const deselectAll = document.createElement('button');
+  deselectAll.className = 'btn btn-sm btn-ghost';
+  deselectAll.textContent = 'Deselect all';
+  deselectAll.addEventListener('click', () => setAllVisible(false));
+  bulk.append(selectAll, deselectAll);
+
+  const footer = document.createElement('div');
+  footer.className = 'filter-pop-footer';
+  const remove = document.createElement('button');
+  remove.className = 'btn btn-sm btn-danger btn-block';
+  remove.textContent = 'Remove filter';
+  syncRemoveState = (): void => {
+    remove.disabled = !columnFilters.has(column.name);
+  };
+  syncRemoveState();
+  remove.addEventListener('click', () => {
     columnFilters.delete(column.name);
     filterPop.hidden = true;
     render();
   });
+  footer.append(remove);
 
-  filterPop.append(title, search, list, clear);
+  filterPop.append(title, search, bulk, list, footer);
   const rect = anchor.getBoundingClientRect();
   filterPop.style.left = `${Math.min(rect.left, window.innerWidth - 280)}px`;
   filterPop.style.top = `${rect.bottom + 2}px`;
