@@ -317,7 +317,8 @@ function onGridShortcut(event: KeyboardEvent): void {
 }
 
 // Start editing the lead cell of the current selection, optionally seeded with a typed character.
-// Plain text columns only; dates, JSON and enums keep their double-click / dropdown editors.
+// Long values (JSON, TEXT) open their modal instead; dates and enums keep their double-click /
+// dropdown editors.
 function beginSelectionEdit(seed: string | null): void {
   const rect = selRect();
   if (!rect || !hasPrimaryKey) {
@@ -326,11 +327,19 @@ function beginSelectionEdit(seed: string | null): void {
   const lead = selFocus ?? selAnchor!;
   const column = renderColumns[lead.c];
   const model = rowModels[lead.r];
-  if (!model || !isCellEditable(model, column) || !isPlainTextColumn(column)) {
+  if (!model || !isCellEditable(model, column)) {
     return;
   }
   const input = cellInputAt(lead.r, lead.c);
   if (!input) {
+    return;
+  }
+  const valueEditor = valueEditorFor(model, column);
+  if (valueEditor) {
+    openValueModal(valueEditor, model, column, input, input.closest('td')!, seed);
+    return;
+  }
+  if (!isPlainTextColumn(column)) {
     return;
   }
   bulkRect = rect.r1 !== rect.r2 || rect.c1 !== rect.c2 ? { ...rect } : null;
@@ -445,6 +454,22 @@ function isCellEditable(model: RowModel, column: ColumnMeta): boolean {
 function isPlainTextColumn(column: ColumnMeta): boolean {
   const type = column.type.toLowerCase();
   return !isDateColumn(type) && !type.includes('json') && enumValues(column.type) === null;
+}
+
+type ValueEditor = 'json' | 'text';
+
+// Which multi-line modal a cell opens, if any: JSON for JSON columns and for text columns holding
+// a JSON-shaped value, plain text for TEXT/CLOB columns. Single-line types edit inline.
+function valueEditorFor(model: RowModel, column: ColumnMeta): ValueEditor | null {
+  if (column.type.toLowerCase().includes('json') || looksLikeJson(model.values[column.name])) {
+    return 'json';
+  }
+  return isLongTextColumn(column) ? 'text' : null;
+}
+
+// TEXT, TINYTEXT…LONGTEXT (MySQL), text/citext (PostgreSQL), TEXT/CLOB (SQLite); never VARCHAR.
+function isLongTextColumn(column: ColumnMeta): boolean {
+  return /text|clob/.test(column.type.toLowerCase());
 }
 
 function setCellValue(model: RowModel, column: ColumnMeta, raw: string): void {
@@ -693,32 +718,63 @@ pageSizeInput.addEventListener('change', () => {
   api.postMessage({ type: 'page', offset: 0, pageSize: pageSizeInput.value === 'No' ? 0 : parseInt(pageSizeInput.value, 10) });
 });
 
-const jsonModal = element<HTMLDivElement>('jsonModal');
-const jsonModalText = element<HTMLTextAreaElement>('jsonModalText');
-const jsonStatus = element<HTMLSpanElement>('jsonStatus');
-const jsonModalSave = element<HTMLButtonElement>('jsonModalSave');
-const jsonModalCancel = element<HTMLButtonElement>('jsonModalCancel');
+// One modal for every multi-line value; `editor` switches it between JSON (validated, formatted,
+// Enter-assisted) and plain text (saved verbatim).
+const valueModal = element<HTMLDivElement>('valueModal');
+const valueModalTitle = element<HTMLSpanElement>('valueModalTitle');
+const valueModalColumn = element<HTMLSpanElement>('valueModalColumn');
+const valueModalText = element<HTMLTextAreaElement>('valueModalText');
+const valueStatus = element<HTMLSpanElement>('valueStatus');
+const valueModalSave = element<HTMLButtonElement>('valueModalSave');
+const valueModalCancel = element<HTMLButtonElement>('valueModalCancel');
 const jsonFormat = element<HTMLButtonElement>('jsonFormat');
 
-let jsonTarget: { model: RowModel; column: ColumnMeta; input: HTMLInputElement; cell: HTMLTableCellElement } | null = null;
+let valueTarget: {
+  editor: ValueEditor;
+  model: RowModel;
+  column: ColumnMeta;
+  input: HTMLInputElement;
+  cell: HTMLTableCellElement;
+} | null = null;
 
-jsonModalSave.addEventListener('click', saveJsonModal);
-jsonModalCancel.addEventListener('click', closeJsonModal);
+valueModalSave.addEventListener('click', saveValueModal);
+valueModalCancel.addEventListener('click', closeValueModal);
 jsonFormat.addEventListener('click', formatJsonModal);
-jsonModalText.addEventListener('input', validateJsonModal);
-// Only Enter is assisted (scaffolding); every other key types literally — nothing else is intercepted.
-jsonModalText.addEventListener('keydown', onJsonEnter);
+valueModalText.addEventListener('input', validateValueModal);
+valueModal.addEventListener('keydown', onValueModalKeydown);
+
+// Escape cancels, Ctrl/Cmd+Enter saves. In JSON mode a bare Enter is assisted (scaffolding);
+// every other key types literally — nothing else is intercepted.
+function onValueModalKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeValueModal();
+    return;
+  }
+  if (event.key !== 'Enter') {
+    return;
+  }
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault();
+    saveValueModal();
+    return;
+  }
+  if (valueTarget?.editor === 'json' && event.target === valueModalText) {
+    event.preventDefault();
+    smartJsonEnter();
+  }
+}
 
 // Pretty-print the JSON, first tidying common slips (trailing commas) so it usually just works.
 function formatJsonModal(): void {
-  const tidied = jsonModalText.value.replace(/,(\s*[}\]])/g, '$1');
+  const tidied = valueModalText.value.replace(/,(\s*[}\]])/g, '$1');
   try {
-    jsonModalText.value = JSON.stringify(JSON.parse(tidied), null, 2);
+    valueModalText.value = JSON.stringify(JSON.parse(tidied), null, 2);
   } catch {
     // Leave the text untouched when it can't be parsed; the status line explains why.
   }
   validateJsonModal();
-  jsonModalText.focus();
+  valueModalText.focus();
 }
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
@@ -1367,12 +1423,12 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
 
   const cell = document.createElement('td');
   const input = document.createElement('input');
-  // Route to the multi-line JSON editor for real JSON columns AND for text columns whose value
-  // looks like JSON (object/array) — otherwise Enter would just commit the single-line input.
-  const isJson = editable && (column.type.toLowerCase().includes('json') || looksLikeJson(model.values[column.name]));
-  const dateType = editable && !isJson ? dateInputType(column.type) : null;
+  // Long values (JSON, TEXT) open the multi-line modal — a single-line input would swallow their
+  // newlines and Enter would just commit it.
+  const valueEditor = editable ? valueEditorFor(model, column) : null;
+  const dateType = editable && !valueEditor ? dateInputType(column.type) : null;
   // Foreign-key columns get a searchable dropdown of referenced values (key + descriptive label).
-  const fk = editable && !isJson && !dateType ? foreignKeyFor(column.name) : undefined;
+  const fk = editable && !valueEditor && !dateType ? foreignKeyFor(column.name) : undefined;
   const value = model.values[column.name];
   // Dates display formatted; a double-click swaps to a native date field for editing.
   input.value = dateType ? formatDate(value, dateLocale) : value ?? '';
@@ -1415,9 +1471,9 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     }
   });
 
-  if (isJson) {
-    input.classList.add('json');
-    input.addEventListener('dblclick', () => openJsonModal(model, column, input, cell));
+  if (valueEditor) {
+    input.classList.add('modal-editable');
+    input.addEventListener('dblclick', () => openValueModal(valueEditor, model, column, input, cell));
   } else if (editable) {
     input.addEventListener('dblclick', () => {
       if (dateType) {
@@ -1903,17 +1959,27 @@ function showCellMenu(x: number, y: number, actions: NavAction[]): void {
   cellMenu.hidden = false;
 }
 
-function openJsonModal(
+// A typed `seed` (Excel-style "type over the cell") replaces the current value in the editor.
+function openValueModal(
+  editor: ValueEditor,
   model: RowModel,
   column: ColumnMeta,
   input: HTMLInputElement,
   cell: HTMLTableCellElement,
+  seed: string | null = null,
 ): void {
-  jsonTarget = { model, column, input, cell };
-  jsonModalText.value = prettyJson(model.values[column.name]);
-  jsonModal.hidden = false;
-  validateJsonModal();
-  jsonModalText.focus();
+  valueTarget = { editor, model, column, input, cell };
+  const value = model.values[column.name];
+  valueModalTitle.textContent = editor === 'json' ? 'Edit JSON' : 'Edit text';
+  valueModalColumn.textContent = `${column.name} · ${column.type}`;
+  jsonFormat.hidden = editor !== 'json';
+  valueModalText.value = seed ?? (editor === 'json' ? prettyJson(value) : (value ?? ''));
+  valueModal.hidden = false;
+  validateValueModal();
+  valueModalText.focus();
+  if (seed !== null) {
+    valueModalText.setSelectionRange(seed.length, seed.length);
+  }
 }
 
 function prettyJson(value: string | null): string {
@@ -1927,36 +1993,51 @@ function prettyJson(value: string | null): string {
   }
 }
 
+function validateValueModal(): boolean {
+  return valueTarget?.editor === 'json' ? validateJsonModal() : validateTextModal();
+}
+
 // Live validity: colors the status and disables Save on invalid JSON (typing stays free — only
 // the Save button is gated, never the textarea).
 function validateJsonModal(): boolean {
-  const text = jsonModalText.value.trim();
+  const text = valueModalText.value.trim();
   if (text === '') {
-    jsonStatus.textContent = 'empty → NULL';
-    jsonStatus.className = 'json-status';
-    jsonModalSave.disabled = false;
+    setValueStatus(emptyValueStatus(), 'muted');
+    valueModalSave.disabled = false;
     return true;
   }
   try {
     JSON.parse(text);
-    jsonStatus.textContent = '● Valid JSON';
-    jsonStatus.className = 'json-status ok';
-    jsonModalSave.disabled = false;
+    setValueStatus('Valid JSON', 'ok');
+    valueModalSave.disabled = false;
     return true;
   } catch (error) {
-    jsonStatus.textContent = `● ${(error as Error).message}`;
-    jsonStatus.className = 'json-status error';
-    jsonModalSave.disabled = true;
+    setValueStatus((error as Error).message, 'error');
+    valueModalSave.disabled = true;
     return false;
   }
 }
 
-function onJsonEnter(event: KeyboardEvent): void {
-  if (event.key !== 'Enter') {
-    return;
+// Plain text is always saveable; the status just describes what will be stored.
+function validateTextModal(): boolean {
+  const text = valueModalText.value;
+  if (text === '') {
+    setValueStatus(emptyValueStatus(), 'muted');
+  } else {
+    const lineCount = text.split('\n').length;
+    setValueStatus(`${text.length} chars · ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`, 'muted');
   }
-  event.preventDefault();
-  smartJsonEnter();
+  valueModalSave.disabled = false;
+  return true;
+}
+
+function emptyValueStatus(): string {
+  return valueTarget?.column.isNullable ? 'empty → NULL' : 'empty';
+}
+
+function setValueStatus(text: string, tone: 'muted' | 'ok' | 'error'): void {
+  valueStatus.textContent = text;
+  valueStatus.className = `value-status ${tone}`;
 }
 
 // The bracket enclosing `pos` ('{' object, '[' array, null at top level), ignoring string contents.
@@ -1988,8 +2069,8 @@ function enclosingBracket(value: string, pos: number): '{' | '[' | null {
 // (between "" for an object); otherwise a separating comma is added and, inside an object, the next
 // key is scaffolded. Only Enter is remapped — typing is never blocked.
 function smartJsonEnter(): void {
-  const value = jsonModalText.value;
-  const start = jsonModalText.selectionStart;
+  const value = valueModalText.value;
+  const start = valueModalText.selectionStart;
   const lineStart = value.lastIndexOf('\n', start - 1) + 1;
   const indent = /^[ \t]*/.exec(value.slice(lineStart, start))?.[0] ?? '';
   const innerIndent = `${indent}  `;
@@ -2017,27 +2098,44 @@ function smartJsonEnter(): void {
 }
 
 function replaceJsonSelection(text: string, caret: number): void {
-  const value = jsonModalText.value;
-  jsonModalText.value = value.slice(0, jsonModalText.selectionStart) + text + value.slice(jsonModalText.selectionEnd);
-  jsonModalText.selectionStart = jsonModalText.selectionEnd = caret;
+  const value = valueModalText.value;
+  valueModalText.value = value.slice(0, valueModalText.selectionStart) + text + value.slice(valueModalText.selectionEnd);
+  valueModalText.selectionStart = valueModalText.selectionEnd = caret;
   validateJsonModal();
 }
 
-function saveJsonModal(): void {
+function saveValueModal(): void {
   // Never persist invalid JSON (backs up the disabled Save button).
-  if (!jsonTarget || !validateJsonModal()) {
+  if (!valueTarget || !validateValueModal()) {
     return;
   }
   pushUndo();
-  const text = jsonModalText.value.trim();
-  const { model, column, input, cell } = jsonTarget;
-  const next = text === '' ? (column.isNullable ? null : '') : compactJson(text);
+  const { editor, model, column, input, cell } = valueTarget;
+  const next = editor === 'json' ? jsonValueToStore(column) : textValueToStore(column);
   model.values[column.name] = next;
   input.value = next ?? '';
   input.classList.toggle('null', next === null);
   applyCellState(cell, model, column);
   refreshPending();
-  closeJsonModal();
+  closeValueModal();
+}
+
+// JSON is stored compact; an empty editor stores NULL when the column allows it.
+function jsonValueToStore(column: ColumnMeta): CellValue {
+  const text = valueModalText.value.trim();
+  if (text === '') {
+    return column.isNullable ? null : '';
+  }
+  return compactJson(text);
+}
+
+// Text is stored verbatim (whitespace and newlines included); empty follows the same NULL rule.
+function textValueToStore(column: ColumnMeta): CellValue {
+  const text = valueModalText.value;
+  if (text === '') {
+    return column.isNullable ? null : '';
+  }
+  return text;
 }
 
 // Valid JSON is stored compact; anything else is saved verbatim (never blocks the save).
@@ -2049,9 +2147,9 @@ function compactJson(text: string): string {
   }
 }
 
-function closeJsonModal(): void {
-  jsonModal.hidden = true;
-  jsonTarget = null;
+function closeValueModal(): void {
+  valueModal.hidden = true;
+  valueTarget = null;
 }
 
 function readInput(input: HTMLInputElement, column: ColumnMeta): CellValue {

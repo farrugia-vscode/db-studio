@@ -448,18 +448,22 @@ function renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
       </select>
     </span>
   </div>
-  <div id="jsonModal" class="modal" hidden>
+  <div id="valueModal" class="modal" hidden>
     <div class="modal-box">
       <div class="modal-head">
-        <span class="modal-title">Edit JSON</span>
-        <span id="jsonStatus" class="json-status"></span>
+        <div class="modal-heading">
+          <span id="valueModalTitle" class="modal-title">Edit JSON</span>
+          <span id="valueModalColumn" class="modal-subtitle"></span>
+        </div>
+        <span id="valueStatus" class="value-status"></span>
       </div>
-      <textarea id="jsonModalText" spellcheck="false"></textarea>
+      <textarea id="valueModalText" spellcheck="false"></textarea>
       <div class="modal-actions">
         <button id="jsonFormat" title="Pretty-print and tidy (removes trailing commas)">Format</button>
         <span class="modal-spacer"></span>
-        <button id="jsonModalCancel">Cancel</button>
-        <button id="jsonModalSave" class="primary">Save</button>
+        <span class="modal-hint"><kbd>Esc</kbd> cancel · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save</span>
+        <button id="valueModalCancel">Cancel</button>
+        <button id="valueModalSave" class="primary">Save</button>
       </div>
     </div>
   </div>

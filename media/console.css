@@ -7,7 +7,7 @@
 
 .toolbar .syntax-hint {
   font-size: var(--fs-sm);
-  color: var(--vscode-editorWarning-foreground, #cca700);
+  color: var(--warn-text);
   white-space: nowrap;
 }
 

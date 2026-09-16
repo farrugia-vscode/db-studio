@@ -27,6 +27,7 @@
   --pop-radius: 6px;
   --pop-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   --modal-radius: 8px;
+  --modal-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
 
   /* ---- Derived neutrals: a single tint scale so a control reads the same in
      light and dark themes without a per-theme override. ---- */
@@ -39,6 +40,21 @@
 
   --surface: var(--vscode-editorWidget-background);
   --label-color: var(--vscode-descriptionForeground);
+
+  /* ---- Semantic tones. VSCode's greens/yellows are tuned for icons, not for
+     12px text, so the text variants are pulled toward the foreground: they
+     darken on light themes and lighten on dark ones, and stay legible on both.
+     The bg/edge variants tint a pill or banner behind that text. ---- */
+  --ok: var(--vscode-testing-iconPassed, #4ec94e);
+  --ok-text: color-mix(in srgb, var(--ok) 55%, var(--vscode-foreground));
+  --ok-bg: color-mix(in srgb, var(--ok) 14%, transparent);
+  --ok-edge: color-mix(in srgb, var(--ok) 40%, transparent);
+  --danger: var(--vscode-errorForeground, #f14c4c);
+  --danger-text: color-mix(in srgb, var(--danger) 75%, var(--vscode-foreground));
+  --danger-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+  --danger-edge: color-mix(in srgb, var(--danger) 40%, transparent);
+  --warn: var(--vscode-editorWarning-foreground, #cca700);
+  --warn-text: color-mix(in srgb, var(--warn) 60%, var(--vscode-foreground));
 
   --font-ui: var(--vscode-font-family);
   --font-code: var(--vscode-editor-font-family);
@@ -115,6 +131,18 @@ body.stacked {
   background: var(--tint-rest);
   border: 1px solid var(--edge-rest);
   transition: background 80ms ease, border-color 80ms ease;
+}
+
+.btn:focus-visible,
+.toolbar button:focus-visible,
+#pager button:focus-visible,
+.edit-bar button:focus-visible,
+.history-tools button:focus-visible,
+.modal-actions button:focus-visible,
+.form-actions button:focus-visible,
+.edit-sql-toggle:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
 }
 
 .btn:hover:not(:disabled),
@@ -292,7 +320,7 @@ body.stacked {
 }
 
 .notice.error {
-  color: var(--vscode-errorForeground);
+  color: var(--danger-text);
 }
 
 .notice:empty {
@@ -332,9 +360,9 @@ body.stacked {
 }
 
 .banner.ok {
-  color: var(--vscode-testing-iconPassed, #4ec94e);
-  background: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ec94e) 12%, transparent);
-  border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ec94e) 35%, transparent);
+  color: var(--ok-text);
+  background: var(--ok-bg);
+  border-color: var(--ok-edge);
 }
 
 .banner.ok::before {
@@ -342,9 +370,9 @@ body.stacked {
 }
 
 .banner.error {
-  color: var(--vscode-errorForeground);
-  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 12%, transparent);
-  border-color: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 35%, transparent);
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border-color: var(--danger-edge);
 }
 
 .banner.error::before {
@@ -446,7 +474,8 @@ td.null {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: color-mix(in srgb, var(--vscode-editor-background) 60%, transparent);
+  backdrop-filter: blur(3px);
 }
 
 .modal-box {
@@ -459,18 +488,36 @@ td.null {
   background: var(--surface);
   border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
   border-radius: var(--modal-radius);
-  box-shadow: var(--pop-shadow);
+  box-shadow: var(--modal-shadow);
 }
 
 .modal-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+/* Title stacked over an optional monospace subtitle (the column being edited, a table name…). */
+.modal-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 .modal-title {
   font-size: 14px;
   font-weight: 600;
+}
+
+.modal-subtitle {
+  font-family: var(--font-code);
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal-actions {
@@ -481,6 +528,74 @@ td.null {
 
 .modal-spacer {
   flex: 1 1 auto;
+}
+
+/* Keyboard hint tucked before the action buttons. */
+.modal-hint {
+  margin-right: 6px;
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+  white-space: nowrap;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--edge-rest);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--tint-rest);
+  color: var(--vscode-foreground);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+/* Compact status pill (validity, counts): a coloured dot then the text. */
+.value-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  box-sizing: border-box;
+  height: var(--ctl-h-sm);
+  padding: 0 10px;
+  border: 1px solid var(--edge-rest);
+  border-radius: 999px;
+  background: var(--tint-rest);
+  color: var(--label-color);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  line-height: calc(var(--ctl-h-sm) - 2px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.value-status::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0;
+}
+
+.value-status:empty {
+  display: none;
+}
+
+.value-status.ok {
+  color: var(--ok-text);
+  background: var(--ok-bg);
+  border-color: var(--ok-edge);
+}
+
+.value-status.error {
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border-color: var(--danger-edge);
 }
 
 /* ---------------------------------------------------------- Code text ---- */
