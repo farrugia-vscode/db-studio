@@ -62,12 +62,6 @@
         "category": "DB Studio"
       },
       {
-        "command": "dbStudio.runQuery",
-        "title": "Run SQL Query",
-        "icon": "$(play)",
-        "category": "DB Studio"
-      },
-      {
         "command": "dbStudio.openTableData",
         "title": "Open Table Data",
         "category": "DB Studio"
@@ -167,11 +161,6 @@
       ],
       "view/item/context": [
         {
-          "command": "dbStudio.runQuery",
-          "when": "view == dbStudio.explorer && viewItem == connection",
-          "group": "inline"
-        },
-        {
           "command": "dbStudio.createDatabase",
           "when": "view == dbStudio.explorer && viewItem == connection",
           "group": "0_new@1"
@@ -212,7 +201,7 @@
           "group": "inline"
         },
         {
-          "command": "dbStudio.runQuery",
+          "command": "dbStudio.openSqlConsole",
           "when": "view == dbStudio.explorer && viewItem == namespace",
           "group": "inline@1"
         },

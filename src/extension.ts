@@ -43,7 +43,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.editConnection', (node?: SchemaNode) => editConnection(node)),
     vscode.commands.registerCommand('dbStudio.removeConnection', (node?: SchemaNode) => removeConnection(node)),
     vscode.commands.registerCommand('dbStudio.refresh', () => treeProvider.refresh()),
-    vscode.commands.registerCommand('dbStudio.runQuery', (node?: SchemaNode) => runQuery(node)),
     vscode.commands.registerCommand('dbStudio.openTableData', (node?: SchemaNode) => openTableData(node)),
     vscode.commands.registerCommand('dbStudio.showTableDdl', (node?: SchemaNode) => showTableDdl(node)),
     vscode.commands.registerCommand('dbStudio.showObjectDdl', (node?: SchemaNode) => showObjectDdl(node)),
@@ -251,14 +250,6 @@ async function removeConnection(node?: SchemaNode): Promise<void> {
 }
 
 // "Run SQL Query" opens the full console; from a schema node it preselects that schema.
-async function runQuery(node?: SchemaNode): Promise<void> {
-  const name = node ? node.connectionName : await pickConnectionName();
-  if (!name) {
-    return;
-  }
-  sqlConsoleView.open(name, node?.kind === 'namespace' ? node.namespace : undefined);
-}
-
 async function openTableData(node?: SchemaNode): Promise<void> {
   // Tables and views both open in the data grid (a view lands read-only: no primary key).
   const isTable = node?.kind === 'table';
