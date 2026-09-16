@@ -743,22 +743,19 @@ body.resizing input {
   flex: 1;
   min-height: 320px;
   resize: vertical;
-  padding: 12px;
+  padding: 12px 14px;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, transparent);
+  border: 1px solid var(--vscode-input-border, var(--edge-rest));
   border-radius: var(--ctl-radius);
   font-family: var(--font-code);
   font-size: var(--fs-md);
+  line-height: 1.55;
+  tab-size: 2;
 }
 
 #valueModalText:focus {
   outline: none;
   border-color: var(--vscode-focusBorder);
-}
-
-.modal-error {
-  color: var(--vscode-errorForeground);
-  font-size: var(--fs-base);
-  min-height: 16px;
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
 }
