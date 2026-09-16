@@ -1,4 +1,4 @@
-import type { CopyFormat, ExtensionToWebview, WebviewToExtension } from '../domain/gridProtocol';
+import type { CopyFormat, ExtensionToWebview, FkOption, WebviewToExtension } from '../domain/gridProtocol';
 import type { ColumnMeta, ForeignKeyMeta, IncomingForeignKey, Row } from '../domain/types';
 import type { EditDto } from '../domain/edits/edit';
 
@@ -151,6 +151,43 @@ const filterPop = document.createElement('div');
 filterPop.className = 'filter-pop';
 filterPop.hidden = true;
 document.body.appendChild(filterPop);
+// Floating searchable dropdown for ENUM cell editing.
+const enumPop = document.createElement('div');
+enumPop.className = 'enum-pop';
+enumPop.hidden = true;
+document.body.appendChild(enumPop);
+// Floating searchable dropdown for foreign-key cell editing (key + descriptive label).
+const fkPop = document.createElement('div');
+fkPop.className = 'enum-pop fk-pop';
+fkPop.hidden = true;
+document.body.appendChild(fkPop);
+
+// The cell each dropdown is anchored to, so it can follow the cell when the grid scrolls.
+let enumAnchor: HTMLElement | null = null;
+let fkAnchor: HTMLElement | null = null;
+
+// Keep an open dropdown glued under its cell while the grid scrolls; hide it once the cell scrolls
+// out of view (a fixed-position popup would otherwise drift over unrelated columns).
+function trackPopup(pop: HTMLElement, anchor: HTMLElement | null): void {
+  if (pop.hidden || !anchor) {
+    return;
+  }
+  const rect = anchor.getBoundingClientRect();
+  const visible = rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
+  if (visible) {
+    positionPopupUnder(pop, rect);
+  } else {
+    pop.hidden = true;
+  }
+}
+document.addEventListener(
+  'scroll',
+  () => {
+    trackPopup(enumPop, enumAnchor);
+    trackPopup(fkPop, fkAnchor);
+  },
+  true,
+);
 document.addEventListener('mousedown', (event) => {
   const target = event.target as Node;
   if (!cellMenu.hidden && !cellMenu.contains(target)) {
@@ -158,6 +195,20 @@ document.addEventListener('mousedown', (event) => {
   }
   if (!filterPop.hidden && !filterPop.contains(target) && !(target instanceof HTMLElement && target.closest('.filter-btn'))) {
     filterPop.hidden = true;
+  }
+  if (!enumPop.hidden && !enumPop.contains(target) && !(target instanceof HTMLElement && target.closest('.cell-enum'))) {
+    enumPop.hidden = true;
+  }
+  if (!fkPop.hidden && !fkPop.contains(target) && !(target instanceof HTMLElement && target.closest('td'))) {
+    fkPop.hidden = true;
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !enumPop.hidden) {
+    enumPop.hidden = true;
+  }
+  if (event.key === 'Escape' && !fkPop.hidden) {
+    fkPop.hidden = true;
   }
 });
 
@@ -620,7 +671,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => 
     return;
   }
   if (message.type === 'fkValuesResult') {
-    resolveFkValues(message.requestId, message.values);
+    resolveFkValues(message.requestId, message.options, message.hasMore);
     return;
   }
   if (message.type === 'editsPreview') {
@@ -1132,9 +1183,8 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   // looks like JSON (object/array) — otherwise Enter would just commit the single-line input.
   const isJson = editable && (column.type.toLowerCase().includes('json') || looksLikeJson(model.values[column.name]));
   const dateType = editable && !isJson ? dateInputType(column.type) : null;
-  // Foreign-key columns get a dropdown of referenced values (loaded on first edit).
+  // Foreign-key columns get a searchable dropdown of referenced values (key + descriptive label).
   const fk = editable && !isJson && !dateType ? foreignKeyFor(column.name) : undefined;
-  const fkList = fk ? attachFkDatalist(cell, input) : null;
   const value = model.values[column.name];
   // Dates display formatted; a double-click swaps to a native date field for editing.
   input.value = dateType ? formatDate(value, dateLocale) : value ?? '';
@@ -1186,10 +1236,9 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
         input.value = toDateInputValue(model.values[column.name], dateType);
         input.readOnly = false;
         input.focus();
+      } else if (fk) {
+        openFkPopup(fk, column, input);
       } else {
-        if (fk && fkList) {
-          requestFkValues(fk, column, fkList);
-        }
         beginInlineEdit(input);
       }
     });
@@ -1312,28 +1361,133 @@ function looksLikeJson(value: CellValue): boolean {
   return value !== null && /^\s*[[{]/.test(value);
 }
 
+// Beyond this many options, the enum dropdown shows only the first N and reveals a search box.
+const ENUM_SEARCH_THRESHOLD = 10;
+
 function buildEnumCell(model: RowModel, column: ColumnMeta, options: string[]): HTMLTableCellElement {
   const cell = document.createElement('td');
-  const select = document.createElement('select');
-  select.className = 'cell-select';
-  if (column.isNullable) {
-    select.appendChild(new Option('NULL', ''));
-  }
-  for (const option of options) {
-    select.appendChild(new Option(option, option));
-  }
-  select.value = model.values[column.name] ?? '';
-  select.addEventListener('change', () => {
-    pushUndo();
-    model.values[column.name] = select.value === '' && column.isNullable ? null : select.value;
-    applyCellState(cell, model, column);
-    refreshPending();
+  // A select-looking display that opens a custom, searchable dropdown (native <select> can't search).
+  const display = document.createElement('button');
+  display.type = 'button';
+  display.className = 'cell-enum';
+  const setDisplay = (): void => {
+    const value = model.values[column.name];
+    display.textContent = value ?? (column.isNullable ? 'NULL' : '');
+    display.classList.toggle('null', value === null);
+  };
+  setDisplay();
+  display.addEventListener('click', () => {
+    openEnumPopup(model, column, options, display, () => {
+      setDisplay();
+      applyCellState(cell, model, column);
+    });
   });
-  select.addEventListener('focus', () => cell.classList.add('focused'));
-  select.addEventListener('blur', () => cell.classList.remove('focused'));
   applyCellState(cell, model, column);
-  cell.appendChild(select);
+  cell.appendChild(display);
   return cell;
+}
+
+// Searchable value picker for an enum cell: first N values always shown; a search box appears
+// (and scans every value) once the list is long enough to be awkward to scan.
+function openEnumPopup(
+  model: RowModel,
+  column: ColumnMeta,
+  options: string[],
+  anchor: HTMLElement,
+  onChange: () => void,
+): void {
+  const current = model.values[column.name];
+  const choices: Array<{ label: string; value: CellValue }> = options.map((option) => ({ label: option, value: option }));
+  if (column.isNullable) {
+    choices.unshift({ label: 'NULL', value: null });
+  }
+  const hasSearch = choices.length > ENUM_SEARCH_THRESHOLD;
+
+  enumPop.replaceChildren();
+  const list = document.createElement('div');
+  list.className = 'enum-pop-list';
+
+  const pick = (value: CellValue): void => {
+    pushUndo();
+    model.values[column.name] = value;
+    enumPop.hidden = true;
+    onChange();
+    refreshPending();
+  };
+
+  const renderList = (needle: string): void => {
+    list.replaceChildren();
+    const filter = needle.trim().toLowerCase();
+    const matches = filter
+      ? choices.filter((choice) => choice.label.toLowerCase().includes(filter))
+      : choices.slice(0, ENUM_SEARCH_THRESHOLD);
+    for (const choice of matches) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'enum-pop-row';
+      row.classList.toggle('selected', choice.value === current);
+      row.classList.toggle('null', choice.value === null);
+      row.textContent = choice.label;
+      row.addEventListener('click', () => pick(choice.value));
+      list.appendChild(row);
+    }
+    // Signal that more values exist below the first N (only when not searching).
+    const hidden = choices.length - matches.length;
+    if (!filter && hidden > 0) {
+      const more = document.createElement('div');
+      more.className = 'enum-pop-more';
+      more.textContent = `+${hidden} more — type to search`;
+      list.appendChild(more);
+    }
+  };
+
+  let search: HTMLInputElement | null = null;
+  if (hasSearch) {
+    search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'enum-pop-search';
+    search.placeholder = 'Search…';
+    search.addEventListener('input', () => renderList(search!.value));
+    // Enter picks the first match; ArrowDown jumps into the list.
+    search.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        list.querySelector<HTMLButtonElement>('.enum-pop-row')?.click();
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        list.querySelector<HTMLButtonElement>('.enum-pop-row')?.focus();
+      }
+    });
+    enumPop.appendChild(search);
+  }
+  enumPop.appendChild(list);
+  renderList('');
+
+  enumAnchor = anchor;
+  const rect = anchor.getBoundingClientRect();
+  enumPop.style.minWidth = `${rect.width}px`;
+  enumPop.hidden = false;
+  positionPopupUnder(enumPop, rect);
+  if (search) {
+    search.focus();
+  }
+}
+
+// Place a floating popup directly under `rect`, measuring it so it never runs off the right edge
+// (shift left) or bottom (flip above). The popup must already be visible to be measurable.
+function positionPopupUnder(pop: HTMLElement, rect: DOMRect): void {
+  const margin = 8;
+  let left = rect.left;
+  if (left + pop.offsetWidth > window.innerWidth - margin) {
+    left = window.innerWidth - pop.offsetWidth - margin;
+  }
+  left = Math.max(margin, left);
+  let top = rect.bottom + 2;
+  if (top + pop.offsetHeight > window.innerHeight - margin) {
+    top = Math.max(margin, rect.top - pop.offsetHeight - 2);
+  }
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
 }
 
 // ---- Foreign keys: value dropdown + navigation ----
@@ -1343,38 +1497,112 @@ function foreignKeyFor(columnName: string): ForeignKeyMeta | undefined {
 }
 
 let fkRequestSeq = 0;
-let fkListSeq = 0;
-const fkPending = new Map<number, (values: string[]) => void>();
+const fkPending = new Map<number, (options: FkOption[], hasMore: boolean) => void>();
 
-// Create an empty datalist bound to a cell's input; options load lazily on first edit.
-function attachFkDatalist(cell: HTMLTableCellElement, input: HTMLInputElement): HTMLDataListElement {
-  const datalist = document.createElement('datalist');
-  datalist.id = `fkl${(fkListSeq += 1)}`;
-  input.setAttribute('list', datalist.id);
-  cell.appendChild(datalist);
-  return datalist;
-}
-
-// Lazily fetch the first values of the referenced column and drop them into the cell's datalist.
-function requestFkValues(fk: ForeignKeyMeta, column: ColumnMeta, datalist: HTMLDataListElement): void {
-  if (datalist.childElementCount > 0) {
-    return; // already loaded for this cell
-  }
+// Ask the host for referenced values (key + label), optionally narrowed by a search term.
+function requestFkValues(
+  fk: ForeignKeyMeta,
+  column: ColumnMeta,
+  search: string,
+  onResult: (options: FkOption[], hasMore: boolean) => void,
+): void {
   const index = fk.columns.indexOf(column.name);
   const refColumn = fk.refColumns[index] ?? fk.refColumns[0];
   const requestId = (fkRequestSeq += 1);
-  fkPending.set(requestId, (values) => {
-    datalist.replaceChildren(...values.map((value) => new Option(value)));
-  });
-  api.postMessage({ type: 'fkValues', requestId, refTable: fk.refTable, refColumn });
+  fkPending.set(requestId, onResult);
+  api.postMessage({ type: 'fkValues', requestId, refTable: fk.refTable, refColumn, search });
 }
 
-function resolveFkValues(requestId: number, values: string[]): void {
+function resolveFkValues(requestId: number, options: FkOption[], hasMore: boolean): void {
   const resolve = fkPending.get(requestId);
   if (resolve) {
-    resolve(values);
+    resolve(options, hasMore);
     fkPending.delete(requestId);
   }
+}
+
+// Searchable foreign-key picker: each row shows the referenced key plus a descriptive label
+// (name/code/label/…). Search runs server-side; picking writes the key into the cell.
+function openFkPopup(fk: ForeignKeyMeta, column: ColumnMeta, input: HTMLInputElement): void {
+  const current = input.value;
+  fkPop.replaceChildren();
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'enum-pop-search';
+  search.placeholder = 'Search…';
+  const list = document.createElement('div');
+  list.className = 'enum-pop-list';
+  fkPop.append(search, list);
+
+  const pick = (value: string): void => {
+    fkPop.hidden = true;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  };
+
+  const renderRows = (options: FkOption[], hasMore: boolean): void => {
+    list.replaceChildren();
+    const count = document.createElement('div');
+    count.className = 'enum-pop-more';
+    count.textContent = options.length === 0 ? 'No matching rows' : `${options.length}${hasMore ? '+' : ''} result${options.length > 1 ? 's' : ''}`;
+    list.appendChild(count);
+    for (const option of options) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'enum-pop-row';
+      row.classList.toggle('selected', option.value === current);
+      // Same single-line rendering as the enum picker (which renders reliably): label · key.
+      row.textContent = option.label !== null ? `${option.label}   ·   ${option.value}` : option.value;
+      row.title = option.label !== null ? `${option.label} — ${option.value}` : option.value;
+      row.addEventListener('click', () => pick(option.value));
+      list.appendChild(row);
+    }
+    if (hasMore) {
+      const more = document.createElement('div');
+      more.className = 'enum-pop-more';
+      more.textContent = 'Refine your search to narrow further';
+      list.appendChild(more);
+    }
+  };
+
+  // Debounce so typing doesn't fire a query per keystroke; the latest request wins.
+  let debounce = 0;
+  let latest = 0;
+  const load = (term: string): void => {
+    const seq = (latest += 1);
+    requestFkValues(fk, column, term, (options, hasMore) => {
+      if (seq === latest) {
+        renderRows(options, hasMore);
+      }
+    });
+  };
+  search.addEventListener('input', () => {
+    window.clearTimeout(debounce);
+    debounce = window.setTimeout(() => load(search.value), 150);
+  });
+  search.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      list.querySelector<HTMLButtonElement>('.enum-pop-row')?.click();
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      list.querySelector<HTMLButtonElement>('.enum-pop-row')?.focus();
+    }
+  });
+
+  // Anchor to the cell (not the padded input) so the popup lines up with the column's left edge.
+  fkAnchor = input.closest('td') ?? input;
+  const rect = fkAnchor.getBoundingClientRect();
+  fkPop.style.minWidth = `${rect.width}px`;
+  fkPop.hidden = false;
+  // Show a placeholder immediately so the dropdown never looks empty while the query runs.
+  const loading = document.createElement('div');
+  loading.className = 'enum-pop-more';
+  loading.textContent = 'Loading…';
+  list.appendChild(loading);
+  positionPopupUnder(fkPop, rect);
+  load('');
+  search.focus();
 }
 
 function onGridContextMenu(event: MouseEvent): void {
@@ -1613,11 +1841,21 @@ function addRow(): void {
   pushUndo();
   const values: Record<string, CellValue> = {};
   for (const column of columns) {
-    values[column.name] = null;
+    values[column.name] = defaultForNewRow(column);
   }
   rowModels.push({ values, original: null, deleted: false });
   render();
   refreshPending();
+}
+
+// A new row starts empty (NULL), except enums: pre-select the column's default value, or the
+// first enum value, so the cell shows a valid choice rather than NULL.
+function defaultForNewRow(column: ColumnMeta): CellValue {
+  const options = enumValues(column.type);
+  if (options && options.length > 0) {
+    return column.defaultValue !== null && options.includes(column.defaultValue) ? column.defaultValue : options[0];
+  }
+  return null;
 }
 
 function commit(): void {

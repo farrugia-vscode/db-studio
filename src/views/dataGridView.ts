@@ -3,7 +3,7 @@ import { ConnectionManager } from '../connections/connectionManager';
 import { EditFactory } from '../domain/edits/editFactory';
 import { QueryHistory } from './queryHistory';
 import { getConnectionIcon } from './connectionIcon';
-import type { ColumnMeta, Row } from '../domain/types';
+import type { ColumnMeta, IndexMeta, Row } from '../domain/types';
 import type { CopyFormat, CopyMessage, ExportMessage, ExtensionToWebview, WebviewToExtension } from '../domain/gridProtocol';
 import type { EditDto } from '../domain/edits/edit';
 import { csvCell, sqlLiteral } from '../domain/exportFormat';
@@ -137,7 +137,7 @@ class GridSession {
       return;
     }
     if (message.type === 'fkValues') {
-      await this.sendFkValues(message.requestId, message.refTable, message.refColumn);
+      await this.sendFkValues(message.requestId, message.refTable, message.refColumn, message.search);
       return;
     }
     if (message.type === 'openRelated') {
@@ -172,19 +172,50 @@ class GridSession {
   }
 
   /** The first distinct values of a referenced column, feeding an FK cell dropdown. */
-  private async sendFkValues(requestId: number, refTable: string, refColumn: string): Promise<void> {
+  private async sendFkValues(requestId: number, refTable: string, refColumn: string, search?: string): Promise<void> {
     try {
       const driver = await this.manager.getDriver(this.target.connectionName);
       const ref = driver.buildTableRef(this.target.namespace, refTable);
       const col = driver.quoteIdentifier(refColumn);
+      const [columns, indexes] = await Promise.all([
+        driver.listColumns(this.target.namespace, refTable),
+        driver.listIndexes(this.target.namespace, refTable),
+      ]);
+      const displayColumn = pickDisplayColumn(columns, indexes, refColumn);
+      const labelCol = displayColumn ? driver.quoteIdentifier(displayColumn) : null;
+      const selectLabel = labelCol ? `, ${labelCol} AS label` : '';
+      // Search matches the key or the label; limit + 1 so we can tell the user more exist.
+      const term = (search ?? '').trim();
+      const where = this.fkSearchClause(col, labelCol, term);
+      const limit = FK_LIMIT;
+      // Order by the key column: it is indexed (usually the PK), so this stays fast even on large
+      // referenced tables — ordering by the label could full-scan/sort and hang the dropdown.
       const result = await driver.query(
-        `SELECT DISTINCT ${col} AS value FROM ${ref} WHERE ${col} IS NOT NULL ORDER BY ${col} LIMIT 10`,
+        `SELECT ${col} AS value${selectLabel} FROM ${ref} WHERE ${col} IS NOT NULL${where} ORDER BY ${col} LIMIT ${limit + 1}`,
       );
-      const values = result.rows.map((row) => String(row.value));
-      this.post({ type: 'fkValuesResult', requestId, values });
+      const rows = result.rows.slice(0, limit);
+      const options = rows.map((row) => ({
+        value: String(row.value),
+        label: row.label === null || row.label === undefined ? null : String(row.label),
+      }));
+      this.post({ type: 'fkValuesResult', requestId, options, hasMore: result.rows.length > limit });
     } catch (error) {
+      // Still resolve the dropdown (so it stops loading) and surface the error in the notice bar.
+      this.post({ type: 'fkValuesResult', requestId, options: [], hasMore: false });
       this.reportError(error);
     }
+  }
+
+  private fkSearchClause(keyCol: string, labelCol: string | null, term: string): string {
+    if (term === '') {
+      return '';
+    }
+    const like = sqlLiteral(`%${term}%`);
+    const conditions = [`${keyCol} LIKE ${like}`];
+    if (labelCol) {
+      conditions.push(`${labelCol} LIKE ${like}`);
+    }
+    return ` AND (${conditions.join(' OR ')})`;
   }
 
   /** Builds a `col = value AND …` condition (NULL-safe) for foreign-key navigation. */
@@ -447,6 +478,38 @@ function normalizeRow(row: Row, columns: ColumnMeta[]): Row {
     }
   }
   return normalized;
+}
+
+// How many FK options to load per request (client shows them, server-side search narrows further).
+const FK_LIMIT = 50;
+
+// Text-ish column types worth showing as a foreign-key row's human label.
+const TEXT_TYPE_RE = /char|text|varchar|string|enum/i;
+// Preferred descriptive column names, best first.
+const LABEL_NAMES = ['name', 'code', 'label', 'title', 'slug', 'reference', 'email', 'username', 'display_name'];
+
+// A UUID/identifier column makes a useless label (it repeats or is opaque): char(36)/varchar(36),
+// or a name that is clearly an id.
+function isIdentifierColumn(column: ColumnMeta): boolean {
+  return /36|uuid|uniqueidentifier/i.test(column.type) || /(^|_)id$|^uuid$/i.test(column.name);
+}
+
+// Pick the column that best describes a referenced row, in the user's priority order:
+// name → code → label → other UNIQUE text column → other text column → none. UUID/id columns are
+// never used as a label (they repeat or are opaque); then the dropdown shows just the key.
+function pickDisplayColumn(columns: ColumnMeta[], indexes: IndexMeta[], refColumn: string): string | null {
+  const textColumns = columns.filter((column) => column.name !== refColumn && TEXT_TYPE_RE.test(column.type));
+  const named = LABEL_NAMES.map((name) => textColumns.find((column) => column.name.toLowerCase() === name)).find(Boolean);
+  if (named) {
+    return named.name;
+  }
+  // Fallbacks must be descriptive, so drop UUID/id-shaped columns entirely.
+  const descriptive = textColumns.filter((column) => !isIdentifierColumn(column));
+  const uniqueColumns = new Set(
+    indexes.filter((index) => index.isUnique && index.columns.length === 1).map((index) => index.columns[0]),
+  );
+  const uniqueText = descriptive.find((column) => uniqueColumns.has(column.name));
+  return (uniqueText ?? descriptive[0])?.name ?? null;
 }
 
 function buildNonce(): string {

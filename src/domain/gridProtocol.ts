@@ -32,11 +32,19 @@ export interface GridErrorMessage {
   message: string;
 }
 
-/** Distinct values of a referenced column, returned for an FK dropdown. */
+/** One pickable foreign-key value: the referenced key plus a human-readable label (if any). */
+export interface FkOption {
+  value: string;
+  /** A descriptive column of the referenced row (name/code/label/…), or null when none fits. */
+  label: string | null;
+}
+
+/** Referenced values (key + label) returned for an FK dropdown, plus whether more were truncated. */
 export interface FkValuesResultMessage {
   type: 'fkValuesResult';
   requestId: number;
-  values: string[];
+  options: FkOption[];
+  hasMore: boolean;
 }
 
 /** The real SQL statements the pending edits will run, for the bottom review drawer. */
@@ -111,12 +119,13 @@ export interface ExportMessage {
   rows: Array<Array<string | null>>;
 }
 
-/** Load the first values of a referenced column to populate an FK cell dropdown. */
+/** Load referenced values (optionally filtered by `search`) to populate an FK cell dropdown. */
 export interface FkValuesMessage {
   type: 'fkValues';
   requestId: number;
   refTable: string;
   refColumn: string;
+  search?: string;
 }
 
 /** Open another table filtered to `columns = values` (foreign-key navigation). */
