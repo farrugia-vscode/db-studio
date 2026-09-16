@@ -1775,18 +1775,52 @@ function onGridContextMenu(event: MouseEvent): void {
   if (!model || !column) {
     return;
   }
-  const actions = cellNavActions(model, column);
-  if (actions.length === 0) {
-    return;
-  }
+  const actions: NavAction[] = [
+    {
+      label: `Apply in WHERE  (${column.name})`,
+      icon: MENU_FILTER_SVG,
+      run: () => applyColumnToWhere(column, model.values[column.name]),
+    },
+    ...cellNavActions(model, column),
+  ];
   event.preventDefault();
   showCellMenu(event.clientX, event.clientY, actions);
 }
 
+// Append `col = value` to the WHERE box (AND-joined when a clause is already there), then re-query.
+function applyColumnToWhere(column: ColumnMeta, value: CellValue): void {
+  cellMenu.hidden = true;
+  const condition = value === null ? `${column.name} IS NULL` : `${column.name} = ${whereLiteral(column, value)}`;
+  const current = filterInput.value.trim();
+  filterInput.value = current ? `${current} AND ${condition}` : condition;
+  api.postMessage({ type: 'filter', value: filterInput.value });
+}
+
+// Numeric columns stay unquoted; everything else is single-quoted with quotes doubled for escaping.
+function whereLiteral(column: ColumnMeta, value: string): string {
+  if (isNumericColumn(column.type)) {
+    return value;
+  }
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function isNumericColumn(type: string): boolean {
+  return /\b(int|integer|serial|decimal|numeric|float|double|real|bit)\b/i.test(type);
+}
+
 interface NavAction {
   label: string;
+  icon: string;
   run: () => void;
 }
+
+// Cell-menu glyphs: a funnel (filter), an arrow-out (jump to referenced row), stacked rows (incoming rows).
+const MENU_FILTER_SVG =
+  '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12a.5.5 0 0 1 .4.8L10 9.2V13a.5.5 0 0 1-.7.45l-2-1A.5.5 0 0 1 7 12V9.2L1.6 3.8A.5.5 0 0 1 2 3z"/></svg>';
+const MENU_GOTO_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H3.5v9h9V9"/><path d="M9.5 3.5H12.5V6.5"/><path d="M12.5 3.5 7.5 8.5"/></svg>';
+const MENU_ROWS_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>';
 
 // Forward: from an FK value → the referenced row. Reverse: from a referenced (PK) value → the rows pointing here.
 function cellNavActions(model: RowModel, column: ColumnMeta): NavAction[] {
@@ -1795,6 +1829,7 @@ function cellNavActions(model: RowModel, column: ColumnMeta): NavAction[] {
   if (fk && model.values[column.name] !== null) {
     actions.push({
       label: `Go to ${fk.refTable}`,
+      icon: MENU_GOTO_SVG,
       run: () => openRelated(namespace, fk.refTable, fk.refColumns, fk.columns.map((name) => model.values[name])),
     });
   }
@@ -1802,6 +1837,7 @@ function cellNavActions(model: RowModel, column: ColumnMeta): NavAction[] {
     if (incoming.refColumns.includes(column.name) && model.values[column.name] !== null) {
       actions.push({
         label: `Rows in ${incoming.table} (${incoming.columns.join(', ')})`,
+        icon: MENU_ROWS_SVG,
         run: () =>
           openRelated(incoming.namespace, incoming.table, incoming.columns, incoming.refColumns.map((name) => model.values[name])),
       });
@@ -1820,7 +1856,12 @@ function showCellMenu(x: number, y: number, actions: NavAction[]): void {
   for (const action of actions) {
     const item = document.createElement('button');
     item.className = 'cell-menu-item';
-    item.textContent = action.label;
+    const glyph = document.createElement('span');
+    glyph.className = 'cell-menu-icon';
+    glyph.innerHTML = action.icon;
+    const text = document.createElement('span');
+    text.textContent = action.label;
+    item.append(glyph, text);
     item.addEventListener('click', action.run);
     cellMenu.appendChild(item);
   }
