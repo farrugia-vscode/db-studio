@@ -42,7 +42,7 @@
 }
 
 .querybar input::placeholder {
-  opacity: 0.55;
+  opacity: 0.7;
 }
 
 .toolbar .copy-format {
@@ -283,7 +283,7 @@ th {
   font-size: 10px;
   line-height: 1;
   cursor: pointer;
-  opacity: 0.5;
+  opacity: 0.65;
 }
 
 .filter-btn {
@@ -666,7 +666,6 @@ td.actions {
 .row-num {
   color: var(--label-color);
   font-size: var(--fs-sm);
-  opacity: 0.6;
   user-select: none;
 }
 
