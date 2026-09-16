@@ -1,96 +1,143 @@
-html,
-body {
-  height: 100%;
-}
-
-/* `hidden` must always win over class-level display rules (flex/grid/block). */
-[hidden] {
-  display: none !important;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  font-family: var(--vscode-font-family);
-  color: var(--vscode-foreground);
-  background: var(--vscode-editor-background);
-}
-
-.toolbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background: var(--vscode-editorWidget-background);
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-.toolbar button {
-  cursor: pointer;
-  border: 1px solid var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-  border-radius: 4px;
-  padding: 5px 16px;
-  font-size: 12px;
-}
-
-.toolbar #historyToggle {
-  border-color: var(--vscode-panel-border);
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-}
+/* SQL console — tokens, buttons, tables and popup surfaces come from base.css. */
 
 .toolbar .hint {
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground);
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+}
+
+.toolbar .syntax-hint {
+  font-size: var(--fs-sm);
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  white-space: nowrap;
 }
 
 .toolbar #status {
   margin-left: auto;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
+  font-size: var(--fs-base);
+  color: var(--label-color);
 }
 
 .toolbar .schema-picker {
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--label-color);
 }
 
-.toolbar .schema-picker select {
-  background: var(--vscode-dropdown-background);
-  color: var(--vscode-dropdown-foreground);
-  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-  border-radius: 3px;
-  padding: 2px 4px;
+/* Editor + results stack on the left; the history panel docks on the right. */
+#belowToolbar {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+#workspace {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 #editorWrap {
   position: relative;
   flex: 0 0 auto;
   display: flex;
+  /* The ONLY background in the editor stack lives here, so no layer can paint a stray grey band. */
+  background: var(--vscode-editor-background);
+}
+
+/* The textarea and its highlight layer MUST share every metric below so the coloured
+   tokens sit exactly under the typed text. */
+#editor,
+#highlight {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-family: var(--font-code);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 #editor {
   width: 100%;
   height: 38vh;
   min-height: 90px;
-  resize: vertical;
-  box-sizing: border-box;
-  border: none;
+  /* Height is controlled by the #editorResizer drag handle, not the textarea's own corner grip. */
+  resize: none;
   outline: none;
-  padding: 12px 16px;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-editor-background);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 13px;
-  line-height: 1.5;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  position: relative;
+  z-index: 1;
+  /* Text is transparent so the highlight layer shows through; the caret stays visible. */
+  /* -webkit-text-fill-color beats `color` in Blink, so BOTH are needed to truly hide the textarea
+     text (leaving only the coloured highlight layer visible). Otherwise the textarea text renders
+     on top of the highlight and reads as a grey doubled smear. */
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--vscode-editor-foreground);
+  background: transparent !important;
+}
+
+#editor::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--label-color));
+  /* Re-assert a visible fill; the textarea's transparent fill would otherwise hide the placeholder. */
+  -webkit-text-fill-color: var(--vscode-input-placeholderForeground, var(--label-color));
+}
+
+/* The textarea text is transparent, so a plain selection would look like a meaningless grey block.
+   Re-assert a visible text fill under the selection so it reads as normal selected text. */
+#editor::selection {
+  background: var(--vscode-editor-selectionBackground, #add6ff);
+  color: var(--vscode-editor-foreground);
+  -webkit-text-fill-color: var(--vscode-editor-foreground);
+}
+
+/* Coloured mirror of the editor content, positioned exactly under the textarea. */
+#highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-bottom-color: transparent;
+  color: var(--vscode-editor-foreground);
+  background: transparent;
+}
+
+/* VS Code injects a default <code> style (with a background) into webviews — that background is
+   the grey band hugging the text line. Force it off; the editorWrap already provides the surface. */
+#highlight,
+#highlightCode,
+#highlightCode * {
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.tok-keyword {
+  color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+  font-weight: 600;
+}
+
+.tok-string {
+  color: var(--vscode-debugTokenExpression-string, #ce9178);
+}
+
+.tok-number {
+  color: var(--vscode-debugTokenExpression-number, #b5cea8);
+}
+
+.tok-function {
+  color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+}
+
+.tok-comment {
+  color: var(--label-color);
+  font-style: italic;
 }
 
 /* Autocomplete popup, anchored at the caret. */
@@ -103,12 +150,10 @@ body {
   max-height: 220px;
   min-width: 180px;
   overflow-y: auto;
-  background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background));
-  border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-panel-border));
-  border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 13px;
+  background: var(--vscode-editorSuggestWidget-background, var(--surface));
+  border-color: var(--vscode-editorSuggestWidget-border, var(--vscode-panel-border));
+  font-family: var(--font-code);
+  font-size: var(--fs-md);
 }
 
 .autocomplete li {
@@ -122,11 +167,11 @@ body {
 }
 
 .autocomplete li .kind {
+  margin-left: auto;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--vscode-descriptionForeground);
-  margin-left: auto;
+  color: var(--label-color);
 }
 
 .autocomplete li.active,
@@ -135,32 +180,53 @@ body {
   color: var(--vscode-list-activeSelectionForeground, inherit);
 }
 
-/* History panel, dropped from the toolbar over the editor. */
+/* Docked, full-height history panel on the right of the console (a window, not a dropdown). */
 .history {
-  position: absolute;
-  z-index: 6;
-  top: 4px;
-  left: 8px;
-  width: min(560px, calc(100% - 16px));
-  max-height: 60%;
+  flex: 0 0 320px;
   display: flex;
   flex-direction: column;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  min-height: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--vscode-panel-border);
   overflow: hidden;
 }
 
 .history-head {
-  padding: 6px 12px;
-  font-size: 11px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: var(--bar-pad-y) 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--vscode-descriptionForeground);
-  background: var(--vscode-editorWidget-background);
+  color: var(--label-color);
   border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.history-close {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--label-color);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.history-close:hover {
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.history-count {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--label-color);
+  font-variant-numeric: tabular-nums;
 }
 
 .history-empty {
@@ -170,10 +236,45 @@ body {
   letter-spacing: 0;
 }
 
+/* Filter + export row under the header. */
+.history-tools {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.history-tools input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--ctl-h-sm);
+  box-sizing: border-box;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: var(--ctl-radius);
+  padding: 0 8px;
+  font-size: var(--fs-base);
+}
+
+.history-tools input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.history-tools button {
+  flex: 0 0 auto;
+}
+
 .history ul {
   margin: 0;
   padding: 4px;
   list-style: none;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -181,17 +282,34 @@ body {
   padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
-  font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 3.4em;
-  overflow: hidden;
-  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .history li:hover {
   background: var(--vscode-list-hoverBackground);
+}
+
+.history-sql {
+  font-family: var(--font-code);
+  font-size: var(--fs-base);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 3.4em;
+  overflow: hidden;
+}
+
+.history-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--label-color);
+}
+
+.history-rows {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 #resultWrap {
@@ -199,47 +317,141 @@ body {
   overflow: auto;
 }
 
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 13px;
+/* Drag handle to resize the editor vertically. */
+.editor-resizer {
+  flex: 0 0 auto;
+  height: 6px;
+  cursor: row-resize;
+  background: var(--surface);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.editor-resizer:hover {
+  background: var(--vscode-panel-border);
+}
+
+body.resizing-editor {
+  cursor: row-resize;
+  user-select: none;
+}
+
+/* Result tabs (one per statement in a multi-statement script). */
+.result-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 4px 8px 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.result-tab {
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--label-color);
+  border-radius: 4px 4px 0 0;
+  padding: 4px 10px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  white-space: nowrap;
+}
+
+.result-tab:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.result-tab.active {
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  border-color: var(--vscode-panel-border);
+}
+
+.result-tab.error {
+  color: var(--vscode-errorForeground);
+}
+
+/* Preview of the UPDATE statements a Commit will run. */
+.edit-sql {
+  flex: 0 0 auto;
+  max-height: 25vh;
+  overflow: auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  color: var(--label-color);
+}
+
+/* Row-count / status shown at the bottom, next to the results it describes. */
+.result-footer {
+  flex: 0 0 auto;
+  padding: 5px var(--bar-pad-x);
+  background: var(--surface);
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: var(--fs-base);
+  color: var(--label-color);
+}
+
+/* Result cells are read as text, so the padding sits on the cell itself. */
+th,
+td {
+  padding: 6px 12px;
+  white-space: nowrap;
 }
 
 table.error-view {
   display: block;
-  padding: 12px 16px;
+  padding: 12px var(--bar-pad-x);
   color: var(--vscode-errorForeground);
   white-space: pre-wrap;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--font-code);
 }
 
-th,
-td {
-  border-bottom: 1px solid var(--vscode-panel-border);
-  border-right: 1px solid color-mix(in srgb, var(--vscode-panel-border) 40%, transparent);
+/* Editable result cells (their source table's PK is in the result). */
+th.editable {
+  cursor: help;
+}
+
+td.editable {
+  cursor: text;
+}
+
+td.editable:hover {
+  outline: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 50%, transparent);
+  outline-offset: -1px;
+}
+
+td.dirty {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(78, 201, 78, 0.18)) !important;
+}
+
+.cell-edit {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--vscode-focusBorder);
+  outline: none;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font-family: var(--font-code);
+  font-size: var(--fs-md);
+  padding: 2px 4px;
+}
+
+/* Commit bar shown above the results while there are unsaved cell edits. */
+.edit-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 6px 12px;
-  text-align: left;
-  white-space: nowrap;
+  background: var(--surface);
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: var(--fs-base);
+  color: var(--label-color);
 }
 
-th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--vscode-editorWidget-background);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-tbody tr:nth-child(even) td {
-  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 35%, transparent);
-}
-
-tbody tr:hover td {
-  background: var(--vscode-list-hoverBackground);
-}
-
-td.null {
-  color: var(--vscode-descriptionForeground);
-  font-style: italic;
+.edit-bar-spacer {
+  flex: 1 1 auto;
 }

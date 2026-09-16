@@ -291,7 +291,9 @@ class GridSession {
 
       const result = await driver.query(`SELECT * FROM ${ref} ${where} ${orderClause} ${limitClause}`);
       // Log the logical query (no pagination) so paging doesn't flood the shared history.
-      void this.history.push(this.target.connectionName, `SELECT * FROM ${ref} ${where} ${orderClause}`.trim());
+      void this.history.push(this.target.connectionName, `SELECT * FROM ${ref} ${where} ${orderClause}`.trim(), {
+        rowCount: total,
+      });
       this.post({
         type: 'data',
         namespace: this.target.namespace,
@@ -332,8 +334,8 @@ class GridSession {
       try {
         for (const edit of edits) {
           const statement = edit.toStatement(driver, ref);
-          await driver.runWrite(statement.sql, statement.params);
-          void this.history.push(this.target.connectionName, statement.sql);
+          const affectedRows = await driver.runWrite(statement.sql, statement.params);
+          void this.history.push(this.target.connectionName, statement.sql, { affectedRows });
           applied += 1;
         }
         await driver.commitTransaction();

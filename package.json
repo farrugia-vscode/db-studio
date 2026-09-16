@@ -330,7 +330,8 @@
   },
   "dependencies": {
     "mysql2": "^3.11.0",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "sql-formatter": "^15.8.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

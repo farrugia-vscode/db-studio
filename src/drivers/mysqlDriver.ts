@@ -333,10 +333,15 @@ export class MysqlDriver implements DatabaseDriver {
       return { columns: [], rows: [], affectedRows: (result as ResultSetHeader).affectedRows };
     }
     const rows = result as RowDataPacket[];
-    const columns = fields
-      ? (fields as FieldPacket[]).map((field) => field.name)
-      : Object.keys(rows[0] ?? {});
-    return { columns, rows: rows as Row[] };
+    const packets = fields as (FieldPacket & { orgTable?: string; orgName?: string })[] | undefined;
+    const columns = packets ? packets.map((field) => field.name) : Object.keys(rows[0] ?? {});
+    // orgTable/orgName expose the real source (empty for expressions), enabling editable results.
+    const columnFields = packets?.map((field) => ({
+      name: field.name,
+      sourceTable: field.orgTable ? String(field.orgTable) : null,
+      sourceColumn: field.orgName ? String(field.orgName) : null,
+    }));
+    return { columns, rows: rows as Row[], fields: columnFields };
   }
 
   async runWrite(sql: string, params: unknown[]): Promise<number> {

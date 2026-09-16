@@ -2,10 +2,26 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { QueryHistory } from './queryHistory';
 import { getConnectionIcon } from './connectionIcon';
-import type { ExtensionToConsole, ConsoleToExtension } from '../domain/consoleProtocol';
+import type {
+  ConsoleCellEdit,
+  ConsoleEditableTable,
+  ConsoleResult,
+  ConsoleResultColumn,
+  ConsoleToExtension,
+  ExtensionToConsole,
+} from '../domain/consoleProtocol';
+import type { ColumnSource } from '../domain/types';
 
 const STORAGE_PREFIX = 'dbStudio.console.';
 const MAX_AUTOCOMPLETE_TABLES = 300;
+
+// A small download arrow, marking the CSV/MD buttons as exports.
+const EXPORT_ARROW =
+  '<svg class="btn-icon" viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7"/><path d="M4.5 6 8 9.5 11.5 6"/><path d="M3 12.5h10"/></svg>';
+
+// A small trash can, marking the "Empty" button as a clear action.
+const TRASH_ICON =
+  '<svg class="btn-icon" viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10"/><path d="M5.5 4.5V3h5v1.5"/><path d="M4.5 4.5 5 13h6l.5-8.5"/></svg>';
 
 /**
  * A per-connection SQL console: a full editor whose content is auto-saved to
@@ -71,7 +87,53 @@ export class SqlConsoleView {
     }
     if (message.type === 'run') {
       await this.run(connectionName, panel, message.sql, message.namespace);
+      return;
     }
+    if (message.type === 'exportHistory') {
+      await this.exportHistory(connectionName, message.format, message.content, message.count);
+      return;
+    }
+    if (message.type === 'clearHistory') {
+      await this.clearHistory(connectionName, panel);
+      return;
+    }
+    if (message.type === 'updateCells') {
+      await this.updateCells(connectionName, panel, message.namespace, message.edits);
+    }
+  }
+
+  private async clearHistory(connectionName: string, panel: vscode.WebviewPanel): Promise<void> {
+    if (this.history.list(connectionName).length === 0) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Clear the query history for "${connectionName}"? This cannot be undone.`,
+      { modal: true },
+      'Clear',
+    );
+    if (confirmed !== 'Clear') {
+      return;
+    }
+    await this.history.clear(connectionName);
+    this.post(panel, { type: 'history', items: [] });
+  }
+
+  private async exportHistory(
+    connectionName: string,
+    format: 'csv' | 'markdown',
+    content: string,
+    count: number,
+  ): Promise<void> {
+    const extension = format === 'csv' ? 'csv' : 'md';
+    const uri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(`${connectionName}-history.${extension}`),
+      filters: { [format.toUpperCase()]: [extension] },
+    });
+    if (!uri) {
+      return;
+    }
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
+    vscode.window.showInformationMessage(`DB Studio: exported ${count} quer${count === 1 ? 'y' : 'ies'} to ${uri.fsPath}`);
   }
 
   private async sendInit(connectionName: string, panel: vscode.WebviewPanel): Promise<void> {
@@ -80,9 +142,98 @@ export class SqlConsoleView {
     const configured = this.manager.getConnection(connectionName)?.database?.trim();
     const preselected = this.preselected.get(connectionName);
     const namespace = pickNamespace(namespaces, preselected ?? configured);
-    this.post(panel, { type: 'init', sql, namespaces, namespace });
+    const driver = this.manager.getConnection(connectionName)?.driver ?? 'mysql';
+    this.post(panel, { type: 'init', sql, namespaces, namespace, driver });
     this.post(panel, { type: 'history', items: this.history.list(connectionName) });
     void this.sendSchema(connectionName, panel, namespace);
+  }
+
+  // A result column is editable when its source table's FULL primary key is also in the result
+  // (so an UPDATE can target exactly one row) — PK columns themselves stay read-only.
+  private async computeEditability(
+    connectionName: string,
+    namespace: string,
+    fields: ColumnSource[],
+  ): Promise<{ columnsMeta: ConsoleResultColumn[]; editableTables: ConsoleEditableTable[] }> {
+    const driver = await this.manager.getDriver(connectionName);
+    const tables = [...new Set(fields.map((field) => field.sourceTable).filter((table): table is string => !!table))];
+    const editableTables: ConsoleEditableTable[] = [];
+    const pkByTable = new Map<string, string[]>();
+    for (const table of tables) {
+      let pkColumns: string[] = [];
+      try {
+        const columns = await driver.listColumns(namespace, table);
+        pkColumns = columns.filter((column) => column.isPrimaryKey).map((column) => column.name);
+      } catch {
+        continue; // table not reachable in this schema → leave it read-only
+      }
+      if (pkColumns.length === 0) {
+        continue;
+      }
+      const pkIndexes = pkColumns.map((pk) =>
+        fields.findIndex((field) => field.sourceTable === table && field.sourceColumn === pk),
+      );
+      if (pkIndexes.every((index) => index >= 0)) {
+        editableTables.push({ table, pkColumns, pkIndexes });
+        pkByTable.set(table, pkColumns);
+      }
+    }
+    const columnsMeta: ConsoleResultColumn[] = fields.map((field) => ({
+      name: field.name,
+      sourceTable: field.sourceTable,
+      sourceColumn: field.sourceColumn,
+      editable:
+        !!field.sourceTable &&
+        !!field.sourceColumn &&
+        pkByTable.has(field.sourceTable) &&
+        !pkByTable.get(field.sourceTable)!.includes(field.sourceColumn),
+    }));
+    return { columnsMeta, editableTables };
+  }
+
+  private async updateCells(
+    connectionName: string,
+    panel: vscode.WebviewPanel,
+    namespace: string,
+    edits: ConsoleCellEdit[],
+  ): Promise<void> {
+    if (edits.length === 0) {
+      return;
+    }
+    if (this.isReadOnly(connectionName)) {
+      this.post(panel, { type: 'updateResult', count: 0, error: 'This connection is read-only.' });
+      return;
+    }
+    try {
+      const driver = await this.manager.getDriver(connectionName);
+      await driver.beginTransaction();
+      try {
+        for (const edit of edits) {
+          const ref = driver.buildTableRef(namespace, edit.table);
+          const setClause = `${driver.quoteIdentifier(edit.column)} = ${driver.placeholder(1)}`;
+          const whereClause = edit.pk
+            .map((part, index) => `${driver.quoteIdentifier(part.column)} = ${driver.placeholder(index + 2)}`)
+            .join(' AND ');
+          const params = [edit.value, ...edit.pk.map((part) => part.value)];
+          await driver.runWrite(`UPDATE ${ref} SET ${setClause} WHERE ${whereClause}`, params);
+        }
+        await driver.commitTransaction();
+      } catch (error) {
+        await driver.rollbackTransaction();
+        throw error;
+      }
+      this.post(panel, { type: 'updateResult', count: edits.length });
+    } catch (error) {
+      this.post(panel, {
+        type: 'updateResult',
+        count: 0,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private isReadOnly(connectionName: string): boolean {
+    return this.manager.getConnection(connectionName)?.isReadOnly ?? false;
   }
 
   private async listNamespaces(connectionName: string): Promise<string[]> {
@@ -98,26 +249,48 @@ export class SqlConsoleView {
     if (sql.trim() === '') {
       return;
     }
+    const statements = splitSqlStatements(sql);
+    const driver = await this.manager.getDriver(connectionName);
+    if (namespace) {
+      try {
+        await driver.useNamespace(namespace);
+      } catch {
+        // A bad schema shouldn't abort the whole run; the statements will surface their own errors.
+      }
+    }
+    // Each `;`-separated statement runs independently and produces its own result tab.
+    const results: ConsoleResult[] = [];
+    for (const statement of statements) {
+      results.push(await this.runStatement(connectionName, namespace, statement));
+    }
+    this.post(panel, { type: 'results', results });
+  }
+
+  private async runStatement(connectionName: string, namespace: string, statement: string): Promise<ConsoleResult> {
+    const label = statementLabel(statement);
+    if (this.isReadOnly(connectionName) && !isReadStatement(statement)) {
+      return { label, columns: [], rows: [], error: 'Read-only connection: only read queries are allowed.' };
+    }
     try {
       const driver = await this.manager.getDriver(connectionName);
-      if (namespace) {
-        await driver.useNamespace(namespace);
-      }
-      const result = await driver.query(sql);
-      this.post(panel, { type: 'history', items: await this.history.push(connectionName, sql) });
-      this.post(panel, {
-        type: 'result',
+      const result = await driver.query(statement);
+      const meta =
+        result.columns.length > 0 ? { rowCount: result.rows.length } : { affectedRows: result.affectedRows };
+      void this.history.push(connectionName, statement, meta);
+      const editability =
+        result.fields && !this.isReadOnly(connectionName)
+          ? await this.computeEditability(connectionName, namespace, result.fields)
+          : undefined;
+      return {
+        label,
         columns: result.columns,
         rows: result.rows.map((row) => result.columns.map((column) => formatCell(row[column]))),
         affectedRows: result.affectedRows,
-      });
+        columnsMeta: editability?.columnsMeta,
+        editableTables: editability?.editableTables,
+      };
     } catch (error) {
-      this.post(panel, {
-        type: 'result',
-        columns: [],
-        rows: [],
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return { label, columns: [], rows: [], error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -162,23 +335,50 @@ export class SqlConsoleView {
 </head>
 <body class="stacked">
   <div class="toolbar">
-    <button id="run" class="primary">Run ▷</button>
-    <button id="historyToggle" title="Recent queries">History ⌄</button>
+    <button id="run" class="primary" title="Run (Ctrl+Enter)">Run ▷</button>
+    <button id="format" title="Format SQL (Alt+Shift+F)">Format</button>
+    <button id="historyToggle" title="Recent queries" aria-pressed="false">History</button>
     <span class="hint">Ctrl+Enter — run selection, or the whole script</span>
+    <span id="syntaxHint" class="syntax-hint" hidden></span>
     <span id="status"></span>
     <span class="schema-picker" title="Schema queries run against">Schema
       <select id="schema"></select>
     </span>
   </div>
-  <div id="editorWrap">
-    <textarea id="editor" spellcheck="false" placeholder="SELECT * FROM …"></textarea>
-    <ul id="autocomplete" class="autocomplete" hidden></ul>
-    <div id="historyPanel" class="history" hidden>
-      <div class="history-head">Recent queries<span id="historyEmpty" class="history-empty" hidden>— none yet</span></div>
-      <ul id="historyList"></ul>
+  <div id="belowToolbar">
+    <div id="workspace">
+      <div id="editorWrap">
+        <pre id="highlight" aria-hidden="true"><code id="highlightCode"></code></pre>
+        <textarea id="editor" spellcheck="false" placeholder="SELECT * FROM …"></textarea>
+        <ul id="autocomplete" class="autocomplete" hidden></ul>
+      </div>
+      <div id="editorResizer" class="editor-resizer" title="Drag to resize the editor"></div>
+      <div id="editBar" class="edit-bar" hidden>
+        <span id="editCount"></span>
+        <button id="editSqlToggle" class="edit-sql-toggle" aria-pressed="false" title="Show the SQL that Commit will run">Show SQL</button>
+        <span class="edit-bar-spacer"></span>
+        <button id="editRevert">Revert</button>
+        <button id="editCommit" class="primary">Commit</button>
+      </div>
+      <pre id="editSql" class="edit-sql" hidden></pre>
+      <div id="resultTabs" class="result-tabs" hidden></div>
+      <div id="resultWrap"><table id="result"></table></div>
+      <div id="resultFooter" class="result-footer" hidden></div>
     </div>
+    <aside id="historyPanel" class="history" hidden aria-label="Query history">
+      <div class="history-head">
+        <span>Recent queries<span id="historyCount" class="history-count"></span><span id="historyEmpty" class="history-empty" hidden>— none yet</span></span>
+        <button id="historyClose" class="history-close" title="Close history" aria-label="Close history">×</button>
+      </div>
+      <div class="history-tools">
+        <input id="historyFilter" type="search" placeholder="Filter queries…" spellcheck="false" aria-label="Filter queries">
+        <button id="historyExportCsv" title="Export history as CSV">${EXPORT_ARROW}CSV</button>
+        <button id="historyExportMd" title="Export history as Markdown">${EXPORT_ARROW}MD</button>
+        <button id="historyClear" class="history-clear" title="Clear all history">${TRASH_ICON}Empty</button>
+      </div>
+      <ul id="historyList"></ul>
+    </aside>
   </div>
-  <div id="resultWrap"><table id="result"></table></div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
@@ -191,6 +391,64 @@ function pickNamespace(namespaces: string[], preferred?: string): string {
     return preferred;
   }
   return namespaces[0] ?? '';
+}
+
+// Split a script into individual statements on top-level `;`, ignoring `;` inside strings/comments.
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let start = 0;
+  let index = 0;
+  while (index < sql.length) {
+    const char = sql[index];
+    if (char === '-' && sql[index + 1] === '-') {
+      const newline = sql.indexOf('\n', index);
+      index = newline === -1 ? sql.length : newline;
+      continue;
+    }
+    if (char === '/' && sql[index + 1] === '*') {
+      const close = sql.indexOf('*/', index + 2);
+      index = close === -1 ? sql.length : close + 2;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      index += 1;
+      while (index < sql.length && sql[index] !== char) {
+        index += 1;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === ';') {
+      const statement = sql.slice(start, index).trim();
+      if (statement !== '') {
+        statements.push(statement);
+      }
+      start = index + 1;
+    }
+    index += 1;
+  }
+  const tail = sql.slice(start).trim();
+  if (tail !== '') {
+    statements.push(tail);
+  }
+  return statements.length > 0 ? statements : [sql.trim()];
+}
+
+// Leading keywords that only read data — everything else is treated as a write and blocked on
+// read-only connections. A whitelist (not a blocklist) so unknown/vendor statements stay blocked.
+const READ_ONLY_KEYWORDS = new Set(['SELECT', 'WITH', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'TABLE', 'VALUES', 'USE']);
+
+function isReadStatement(statement: string): boolean {
+  // Skip leading line/block comments so the real first keyword is found.
+  const withoutComments = statement.replace(/^\s*(?:--[^\n]*\n|\/\*[\s\S]*?\*\/|\s)+/, '');
+  const keyword = /^(\w+)/.exec(withoutComments)?.[1]?.toUpperCase();
+  return keyword !== undefined && READ_ONLY_KEYWORDS.has(keyword);
+}
+
+// A one-line snippet of a statement for its result tab.
+function statementLabel(statement: string): string {
+  const oneLine = statement.replace(/\s+/g, ' ').trim();
+  return oneLine.length > 40 ? `${oneLine.slice(0, 40)}…` : oneLine;
 }
 
 function formatCell(value: unknown): string | null {
