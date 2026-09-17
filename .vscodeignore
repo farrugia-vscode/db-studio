@@ -1,0 +1,13 @@
+.harness/**
+.playwright-mcp/**
+.gitignore
+.vscodeignore
+bun.lock
+esbuild.ts
+tsconfig.json
+scripts/**
+src/**
+out/**/*.map
+media/**/*.map
+**/*.vsix
+ROADMAP.md
