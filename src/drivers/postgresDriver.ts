@@ -23,6 +23,8 @@ import { activeForeignKeys, activeIndexes, isCompleteForeignKey } from '../domai
  */
 export class PostgresDriver implements DatabaseDriver {
   private client: Client | null = null;
+  // Server-side process id of the session, the handle pg_cancel_backend() needs.
+  private backendPid: number | null = null;
 
   constructor(
     private readonly config: ConnectionConfig,
@@ -41,6 +43,8 @@ export class PostgresDriver implements DatabaseDriver {
       database: this.config.database || 'postgres',
     });
     await this.client.connect();
+    const pidResult = await this.client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+    this.backendPid = pidResult.rows[0]?.pid ?? null;
   }
 
   async close(): Promise<void> {
@@ -49,6 +53,7 @@ export class PostgresDriver implements DatabaseDriver {
     }
     await this.client.end();
     this.client = null;
+    this.backendPid = null;
   }
 
   async listNamespaces(): Promise<string[]> {
@@ -484,6 +489,28 @@ export class PostgresDriver implements DatabaseDriver {
 
   async rollbackTransaction(): Promise<void> {
     await this.client!.query('ROLLBACK');
+  }
+
+  // pg_cancel_backend needs another session: the running one is busy until the statement ends.
+  async cancelRunning(): Promise<boolean> {
+    const pid = this.backendPid;
+    if (pid === null) {
+      return false;
+    }
+    const canceller = new Client({
+      host: this.config.host,
+      port: this.config.port ?? 5432,
+      user: this.config.user,
+      password: this.password,
+      database: this.config.database || 'postgres',
+    });
+    await canceller.connect();
+    try {
+      await canceller.query('SELECT pg_cancel_backend($1)', [pid]);
+    } finally {
+      await canceller.end();
+    }
+    return true;
   }
 
   async useNamespace(namespace: string): Promise<void> {

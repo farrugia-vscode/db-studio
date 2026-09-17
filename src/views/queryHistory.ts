@@ -7,6 +7,7 @@ const HISTORY_PREFIX = 'dbStudio.history.';
 export interface HistoryMeta {
   rowCount?: number;
   affectedRows?: number;
+  durationMs?: number;
 }
 
 /**

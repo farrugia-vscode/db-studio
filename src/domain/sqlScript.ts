@@ -1,3 +1,5 @@
+import type { DriverKind } from './types';
+
 // Split a script into individual statements on top-level `;`, ignoring `;` inside strings/comments.
 export function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
@@ -54,4 +56,10 @@ export function isReadStatement(statement: string): boolean {
 export function statementLabel(statement: string): string {
   const oneLine = statement.replace(/\s+/g, ' ').trim();
   return oneLine.length > 40 ? `${oneLine.slice(0, 40)}…` : oneLine;
+}
+
+// The engine's plan statement for `statement`: SQLite spells it EXPLAIN QUERY PLAN.
+export function explainStatement(statement: string, driver: DriverKind): string {
+  const keyword = driver === 'sqlite' ? 'EXPLAIN QUERY PLAN' : 'EXPLAIN';
+  return `${keyword} ${statement}`;
 }

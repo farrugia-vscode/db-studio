@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { isReadStatement, splitSqlStatements, statementLabel } from './sqlScript';
+import { explainStatement, isReadStatement, splitSqlStatements, statementLabel } from './sqlScript';
 
 describe('splitSqlStatements', () => {
   test('splits on top-level semicolons and drops empty statements', () => {
@@ -40,5 +40,13 @@ describe('statementLabel', () => {
     const long = `SELECT ${'a, '.repeat(20)}b FROM t`;
     expect(statementLabel(long)).toHaveLength(41);
     expect(statementLabel(long).endsWith('…')).toBe(true);
+  });
+});
+
+describe('explainStatement', () => {
+  test('uses EXPLAIN QUERY PLAN on sqlite and EXPLAIN elsewhere', () => {
+    expect(explainStatement('SELECT 1', 'sqlite')).toBe('EXPLAIN QUERY PLAN SELECT 1');
+    expect(explainStatement('SELECT 1', 'mysql')).toBe('EXPLAIN SELECT 1');
+    expect(explainStatement('SELECT 1', 'postgres')).toBe('EXPLAIN SELECT 1');
   });
 });

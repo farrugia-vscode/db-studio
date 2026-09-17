@@ -311,6 +311,11 @@ export class SqliteDriver implements DatabaseDriver {
     this.database?.exec('ROLLBACK');
   }
 
+  /** node:sqlite runs statements synchronously: nothing to interrupt from outside. */
+  async cancelRunning(): Promise<boolean> {
+    return false;
+  }
+
   /** No-op: SQLite has no `USE`, every query already qualifies its schema. */
   async useNamespace(): Promise<void> {
     await this.connect();

@@ -20,6 +20,8 @@ const api = acquireVsCodeApi();
 const editor = byId<HTMLTextAreaElement>('editor');
 const highlightCode = byId<HTMLElement>('highlightCode');
 const runButton = byId<HTMLButtonElement>('run');
+const cancelButton = byId<HTMLButtonElement>('cancel');
+const explainButton = byId<HTMLButtonElement>('explain');
 const formatButton = byId<HTMLButtonElement>('format');
 const syntaxHint = byId<HTMLSpanElement>('syntaxHint');
 const status = byId<HTMLSpanElement>('status');
@@ -76,7 +78,13 @@ let tokenStart = 0;
 
 let saveTimer = 0;
 
-runButton.addEventListener('click', run);
+runButton.addEventListener('click', () => run(false));
+explainButton.addEventListener('click', () => run(true));
+cancelButton.addEventListener('click', () => {
+  cancelButton.disabled = true;
+  status.textContent = 'Cancelling…';
+  api.postMessage({ type: 'cancel' });
+});
 formatButton.addEventListener('click', formatEditor);
 historyToggle.addEventListener('click', toggleHistory);
 historyClose.addEventListener('click', () => setHistoryOpen(false));
@@ -258,7 +266,7 @@ function onEditorKeydown(event: KeyboardEvent): void {
   }
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
     event.preventDefault();
-    run();
+    run(event.shiftKey);
   } else if (event.altKey && event.shiftKey && event.code === 'KeyF') {
     // Grab the shortcut before VS Code's menu bar reacts to the Alt key.
     event.preventDefault();
@@ -639,13 +647,19 @@ function formatTime(at: number): string {
 }
 
 function formatRows(entry: HistoryEntry): string {
+  const duration = entry.durationMs === undefined ? '' : ` · ${formatDuration(entry.durationMs)}`;
   if (entry.affectedRows !== undefined) {
-    return `${entry.affectedRows} affected`;
+    return `${entry.affectedRows} affected${duration}`;
   }
   if (entry.rowCount !== undefined) {
-    return `${entry.rowCount} returned`;
+    return `${entry.rowCount} returned${duration}`;
   }
   return '';
+}
+
+// "12 ms" under a second, "1.3 s" above.
+function formatDuration(durationMs: number): string {
+  return durationMs < 1000 ? `${durationMs} ms` : `${(durationMs / 1000).toFixed(durationMs < 10000 ? 1 : 0)} s`;
 }
 
 // Export the currently visible (filtered) history to CSV or Markdown; the host writes the file.
@@ -700,15 +714,25 @@ function applyHistory(sql: string): void {
 
 // ---- Query execution & results ----
 
-function run(): void {
+// The selection when there is one, else the whole editor; `explain` asks for the plan instead.
+function run(explain: boolean): void {
   const selection = editor.value.slice(editor.selectionStart, editor.selectionEnd);
   const sql = selection.trim() !== '' ? selection : editor.value;
   if (sql.trim() === '') {
     return;
   }
   closeAutocomplete();
-  status.textContent = 'Running…';
-  api.postMessage({ type: 'run', sql, namespace: currentNamespace });
+  setRunning(true);
+  status.textContent = explain ? 'Explaining…' : 'Running…';
+  api.postMessage({ type: 'run', sql, namespace: currentNamespace, explain });
+}
+
+// While a run is in flight the Run button gives way to Cancel.
+function setRunning(running: boolean): void {
+  runButton.hidden = running;
+  explainButton.disabled = running;
+  cancelButton.hidden = !running;
+  cancelButton.disabled = false;
 }
 
 function populateSchemas(namespaces: string[], selected: string): void {
@@ -754,10 +778,11 @@ function setResultFooter(text: string): void {
 }
 
 function renderResults(results: ConsoleResult[]): void {
+  setRunning(false);
   pendingEdits.clear();
   refreshEditBar();
   status.textContent = '';
-  tabs = results.length > 0 ? results : [{ label: '', columns: [], rows: [] }];
+  tabs = results.length > 0 ? results : [{ label: '', columns: [], rows: [], durationMs: 0 }];
   activeTab = 0;
   renderTabBar();
   renderActiveResult();
@@ -776,7 +801,7 @@ function renderTabBar(): void {
     button.classList.toggle('active', index === activeTab);
     button.classList.toggle('error', !!tab.error);
     button.textContent = `${index + 1}. ${tab.error ? '⚠ ' : ''}${tab.label}`;
-    button.title = tab.label;
+    button.title = `${tab.label}\n${formatDuration(tab.durationMs)}`;
     button.addEventListener('click', () => {
       activeTab = index;
       renderTabBar();
@@ -797,11 +822,11 @@ function renderActiveResult(): void {
     return;
   }
   if (tab.columns.length === 0) {
-    setResultFooter(`Query OK · ${tab.affectedRows ?? 0} row(s) affected`);
+    setResultFooter(`Query OK · ${tab.affectedRows ?? 0} row(s) affected · ${formatDuration(tab.durationMs)}`);
     resultTable.replaceChildren();
     return;
   }
-  setResultFooter(`${tab.rows.length} row(s)`);
+  setResultFooter(`${tab.rows.length} row(s) · ${formatDuration(tab.durationMs)}`);
   const meta = tab.columnsMeta ?? [];
 
   const head = document.createElement('thead');

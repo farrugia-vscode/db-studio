@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { QueryHistory } from './queryHistory';
 import { getConnectionIcon } from './connectionIcon';
-import { isReadStatement, splitSqlStatements, statementLabel } from '../domain/sqlScript';
+import { explainStatement, isReadStatement, splitSqlStatements, statementLabel } from '../domain/sqlScript';
 import type {
   ConsoleCellEdit,
   ConsoleEditableTable,
@@ -87,7 +87,11 @@ export class SqlConsoleView {
       return;
     }
     if (message.type === 'run') {
-      await this.run(connectionName, panel, message.sql, message.namespace);
+      await this.run(connectionName, panel, message.sql, message.namespace, message.explain === true);
+      return;
+    }
+    if (message.type === 'cancel') {
+      await this.cancel(connectionName, panel);
       return;
     }
     if (message.type === 'exportHistory') {
@@ -246,11 +250,20 @@ export class SqlConsoleView {
     }
   }
 
-  private async run(connectionName: string, panel: vscode.WebviewPanel, sql: string, namespace: string): Promise<void> {
+  private async run(
+    connectionName: string,
+    panel: vscode.WebviewPanel,
+    sql: string,
+    namespace: string,
+    explain: boolean,
+  ): Promise<void> {
     if (sql.trim() === '') {
       return;
     }
-    const statements = splitSqlStatements(sql);
+    const driverKind = this.manager.getConnection(connectionName)?.driver ?? 'mysql';
+    const statements = splitSqlStatements(sql).map((statement) =>
+      explain ? explainStatement(statement, driverKind) : statement,
+    );
     const driver = await this.manager.getDriver(connectionName);
     if (namespace) {
       try {
@@ -259,24 +272,50 @@ export class SqlConsoleView {
         // A bad schema shouldn't abort the whole run; the statements will surface their own errors.
       }
     }
-    // Each `;`-separated statement runs independently and produces its own result tab.
+    // Each `;`-separated statement runs independently and produces its own result tab. A cancel
+    // interrupts the running one and skips the rest.
+    this.cancelled.delete(panel);
     const results: ConsoleResult[] = [];
     for (const statement of statements) {
+      if (this.cancelled.has(panel)) {
+        results.push({ label: statementLabel(statement), columns: [], rows: [], durationMs: 0, error: 'Cancelled.' });
+        continue;
+      }
       results.push(await this.runStatement(connectionName, namespace, statement));
     }
+    this.cancelled.delete(panel);
     this.post(panel, { type: 'results', results });
+  }
+
+  // Panels whose current run was cancelled: the statement loop checks it between statements.
+  private readonly cancelled = new Set<vscode.WebviewPanel>();
+
+  private async cancel(connectionName: string, panel: vscode.WebviewPanel): Promise<void> {
+    this.cancelled.add(panel);
+    try {
+      const driver = await this.manager.getDriver(connectionName);
+      if (!(await driver.cancelRunning())) {
+        vscode.window.showWarningMessage('DB Studio: this engine cannot interrupt a running statement.');
+      }
+    } catch (error) {
+      vscode.window.showWarningMessage(`DB Studio: cancel failed - ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private async runStatement(connectionName: string, namespace: string, statement: string): Promise<ConsoleResult> {
     const label = statementLabel(statement);
     if (this.isReadOnly(connectionName) && !isReadStatement(statement)) {
-      return { label, columns: [], rows: [], error: 'Read-only connection: only read queries are allowed.' };
+      return { label, columns: [], rows: [], durationMs: 0, error: 'Read-only connection: only read queries are allowed.' };
     }
+    const startedAt = performance.now();
     try {
       const driver = await this.manager.getDriver(connectionName);
       const result = await driver.query(statement);
+      const durationMs = Math.round(performance.now() - startedAt);
       const meta =
-        result.columns.length > 0 ? { rowCount: result.rows.length } : { affectedRows: result.affectedRows };
+        result.columns.length > 0
+          ? { rowCount: result.rows.length, durationMs }
+          : { affectedRows: result.affectedRows, durationMs };
       void this.history.push(connectionName, statement, meta);
       const editability =
         result.fields && !this.isReadOnly(connectionName)
@@ -287,11 +326,18 @@ export class SqlConsoleView {
         columns: result.columns,
         rows: result.rows.map((row) => result.columns.map((column) => formatCell(row[column]))),
         affectedRows: result.affectedRows,
+        durationMs,
         columnsMeta: editability?.columnsMeta,
         editableTables: editability?.editableTables,
       };
     } catch (error) {
-      return { label, columns: [], rows: [], error: error instanceof Error ? error.message : String(error) };
+      return {
+        label,
+        columns: [],
+        rows: [],
+        durationMs: Math.round(performance.now() - startedAt),
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
@@ -337,6 +383,8 @@ export class SqlConsoleView {
 <body class="stacked">
   <div class="toolbar">
     <button id="run" class="primary" title="Run (Ctrl+Enter)">Run ▷</button>
+    <button id="cancel" class="btn-danger" title="Interrupt the running statement" hidden>Cancel</button>
+    <button id="explain" title="Show the execution plan (Ctrl+Shift+Enter)">Explain</button>
     <button id="format" title="Format SQL (Alt+Shift+F)">Format</button>
     <button id="historyToggle" title="Recent queries" aria-pressed="false">History</button>
     <span class="hint">Ctrl+Enter — run selection, or the whole script</span>

@@ -363,6 +363,26 @@ export class MysqlDriver implements DatabaseDriver {
     await this.connection!.rollback();
   }
 
+  // KILL QUERY needs another session: the running one is busy until the statement ends.
+  async cancelRunning(): Promise<boolean> {
+    const threadId = this.connection?.threadId;
+    if (!threadId) {
+      return false;
+    }
+    const killer = await createConnection({
+      host: this.config.host,
+      port: this.config.port ?? 3306,
+      user: this.config.user,
+      password: this.password,
+    });
+    try {
+      await killer.query(`KILL QUERY ${threadId}`);
+    } finally {
+      await killer.end();
+    }
+    return true;
+  }
+
   async useNamespace(namespace: string): Promise<void> {
     await this.connect();
     await this.connection!.query(`USE ${this.quoteIdentifier(namespace)}`);

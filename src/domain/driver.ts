@@ -50,6 +50,11 @@ export interface StatementExecutor {
   rollbackTransaction(): Promise<void>;
   /** Set the active schema/database for subsequent unqualified queries (console schema picker). */
   useNamespace(namespace: string): Promise<void>;
+  /**
+   * Interrupt the statement currently running on this connection, from a second short-lived
+   * connection. Resolves false when the engine cannot (SQLite runs synchronously).
+   */
+  cancelRunning(): Promise<boolean>;
 }
 
 /** SQL syntax that varies per engine (quoting, placeholder style). */

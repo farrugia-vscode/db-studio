@@ -37,6 +37,8 @@ export interface ConsoleResult {
   rows: Array<Array<string | null>>;
   affectedRows?: number;
   error?: string;
+  /** Wall-clock time of the statement on the host, in milliseconds. */
+  durationMs: number;
   /** Per-column provenance + editability (MySQL only; absent → whole result is read-only). */
   columnsMeta?: ConsoleResultColumn[];
   editableTables?: ConsoleEditableTable[];
@@ -77,6 +79,8 @@ export interface HistoryEntry {
   rowCount?: number;
   /** Rows affected by a write (INSERT/UPDATE/DELETE). */
   affectedRows?: number;
+  /** Wall-clock time of the statement, in milliseconds. */
+  durationMs?: number;
 }
 
 /** Recently run queries for this connection, newest first. */
@@ -121,6 +125,13 @@ export interface ConsoleRunMessage {
   sql: string;
   /** Schema to run against (from the picker). */
   namespace: string;
+  /** Run the engine's EXPLAIN over each statement instead of the statement itself. */
+  explain?: boolean;
+}
+
+/** Interrupt the statement currently running (the rest of the script is skipped). */
+export interface ConsoleCancelMessage {
+  type: 'cancel';
 }
 
 /** The user picked another schema in the console; refresh autocomplete for it. */
@@ -154,6 +165,7 @@ export type ConsoleToExtension =
   | ConsoleReadyMessage
   | ConsoleSaveMessage
   | ConsoleRunMessage
+  | ConsoleCancelMessage
   | ConsoleSchemaChangeMessage
   | ConsoleExportHistoryMessage
   | ConsoleClearHistoryMessage
