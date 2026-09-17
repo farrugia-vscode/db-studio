@@ -53,10 +53,18 @@ export class ConnectionManager {
     return this.getConnections().find((connection) => connection.name === name);
   }
 
-  /** Saves (adds or replaces) a connection. Pass `password: undefined` to keep the stored one. */
+  /**
+   * Saves (adds or replaces in place) a connection. Pass `password: undefined` to keep the
+   * stored one. The array order is the tree order, so a replaced entry keeps its slot.
+   */
   async saveConnection(config: ConnectionConfig, password?: string): Promise<void> {
-    const connections = this.getConnections().filter((connection) => connection.name !== config.name);
-    connections.push(config);
+    const connections = this.getConnections();
+    const index = connections.findIndex((connection) => connection.name === config.name);
+    if (index >= 0) {
+      connections[index] = config;
+    } else {
+      connections.push(config);
+    }
     await this.writeConnections(connections);
     if (password !== undefined) {
       await this.context.secrets.store(this.secretKey(config.name), password);
@@ -99,6 +107,34 @@ export class ConnectionManager {
       suffix += 1;
     }
     return `${base} ${suffix}`;
+  }
+
+  /** Every distinct group name in use, for the form's suggestions. */
+  getGroups(): string[] {
+    const groups = new Set(this.getConnections().map((connection) => connection.group?.trim() ?? '').filter(Boolean));
+    return [...groups].sort((left, right) => left.localeCompare(right));
+  }
+
+  /**
+   * Swaps a connection with its previous (`-1`) or next (`+1`) neighbour of the same group, since
+   * the tree lists each group in array order. A no-op at the edge.
+   */
+  async moveConnection(name: string, direction: -1 | 1): Promise<void> {
+    const connections = this.getConnections();
+    const index = connections.findIndex((connection) => connection.name === name);
+    if (index < 0) {
+      return;
+    }
+    const group = connections[index].group?.trim() ?? '';
+    let neighbour = index + direction;
+    while (neighbour >= 0 && neighbour < connections.length && (connections[neighbour].group?.trim() ?? '') !== group) {
+      neighbour += direction;
+    }
+    if (neighbour < 0 || neighbour >= connections.length) {
+      return;
+    }
+    [connections[index], connections[neighbour]] = [connections[neighbour], connections[index]];
+    await this.writeConnections(connections);
   }
 
   async removeConnection(name: string): Promise<void> {

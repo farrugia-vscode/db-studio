@@ -12,6 +12,8 @@ const DEFAULT_PORTS: Record<DriverKind, string> = { mysql: '3306', postgres: '54
 
 const form = byId<HTMLFormElement>('form');
 const nameInput = byId<HTMLInputElement>('name');
+const groupInput = byId<HTMLInputElement>('group');
+const groupOptions = byId<HTMLDataListElement>('groupOptions');
 const colorPicker = byId<HTMLDivElement>('colorPicker');
 const driverPicker = byId<HTMLDivElement>('driverPicker');
 const hostInput = byId<HTMLInputElement>('host');
@@ -54,6 +56,7 @@ form.addEventListener('submit', (event) => {
 window.addEventListener('message', (event: MessageEvent<ExtensionToForm>) => {
   const message = event.data;
   if (message.type === 'init') {
+    groupOptions.replaceChildren(...message.groups.map((group) => new Option(group)));
     applyInit(message.isEdit, message.connection);
     return;
   }
@@ -75,6 +78,7 @@ function applyInit(isEdit: boolean, connection: Partial<ConnectionConfig>): void
     ? 'Changes take effect the next time the connection is opened.'
     : 'Connections are saved with the open folder; the password goes to the OS secret storage.';
   nameInput.value = connection.name ?? '';
+  groupInput.value = connection.group ?? '';
   setIcon(connection.icon ?? '');
   setDriver(connection.driver ?? 'mysql');
   hostInput.value = connection.host ?? '127.0.0.1';
@@ -90,6 +94,7 @@ function applyInit(isEdit: boolean, connection: Partial<ConnectionConfig>): void
 function readConnection(): ConnectionConfig {
   return {
     name: nameInput.value.trim(),
+    group: groupInput.value.trim() || undefined,
     driver: selectedDriver,
     host: hostInput.value.trim(),
     port: portInput.value ? Number(portInput.value) : undefined,

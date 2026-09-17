@@ -45,6 +45,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.removeConnection', (node?: SchemaNode) => removeConnection(node)),
     vscode.commands.registerCommand('dbStudio.refresh', () => treeProvider.refresh()),
     vscode.commands.registerCommand('dbStudio.refreshNode', (node?: SchemaNode) => treeProvider.refresh(node)),
+    vscode.commands.registerCommand('dbStudio.moveConnectionUp', (node?: SchemaNode) => moveConnection(node, -1)),
+    vscode.commands.registerCommand('dbStudio.moveConnectionDown', (node?: SchemaNode) => moveConnection(node, 1)),
     vscode.commands.registerCommand('dbStudio.copyName', (node?: SchemaNode) => copyName(node)),
     vscode.commands.registerCommand('dbStudio.copyDdl', (node?: SchemaNode) => copyDdl(node)),
     vscode.commands.registerCommand('dbStudio.openTableData', (node?: SchemaNode) => openTableData(node)),
@@ -286,6 +288,14 @@ async function showObjectDdl(node?: SchemaNode): Promise<void> {
   } catch (error) {
     reportError(error);
   }
+}
+
+async function moveConnection(node: SchemaNode | undefined, direction: -1 | 1): Promise<void> {
+  if (!node || node.kind !== 'connection') {
+    return;
+  }
+  await manager.moveConnection(node.connectionName, direction);
+  treeProvider.refresh();
 }
 
 // The bare identifier: table/object/namespace name, or the column/index/key name for a field.

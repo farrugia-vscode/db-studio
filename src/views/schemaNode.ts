@@ -1,7 +1,15 @@
 import * as vscode from 'vscode';
 import type { SchemaObjectKind } from '../domain/types';
 
-export type NodeKind = 'connection' | 'namespace' | 'group' | 'table' | 'tablePart' | 'field' | 'object';
+export type NodeKind =
+  | 'connectionGroup'
+  | 'connection'
+  | 'namespace'
+  | 'group'
+  | 'table'
+  | 'tablePart'
+  | 'field'
+  | 'object';
 
 /** Which object family a `group` node lists. `tables` are shown directly, not grouped. */
 export type GroupKind = 'views' | 'procedures' | 'functions' | 'triggers' | 'sequences';
@@ -28,4 +36,7 @@ export class SchemaNode extends vscode.TreeItem {
     super(label, collapsibleState);
     this.contextValue = kind;
   }
+
+  /** For `connectionGroup` nodes: the folder name its connections share. */
+  groupName?: string;
 }

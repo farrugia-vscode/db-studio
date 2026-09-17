@@ -123,6 +123,7 @@ export class ConnectionFormView {
       type: 'init',
       isEdit: this.editing !== null,
       connection: this.editing ?? {},
+      groups: this.manager.getGroups(),
     };
     this.panel?.webview.postMessage(message);
   }
@@ -150,6 +151,10 @@ export class ConnectionFormView {
     <section class="section">
       <div class="section-title">Identity</div>
       <label>Name<input id="name" placeholder="e.g. Shop staging" required></label>
+      <label>Group
+        <input id="group" list="groupOptions" placeholder="optional folder in the tree (e.g. Clients)">
+        <datalist id="groupOptions"></datalist>
+      </label>
       <label>Colour
         <div class="color-picker" id="colorPicker" role="radiogroup" aria-label="Connection colour">
           <button type="button" class="color-swatch swatch-none" data-icon="" role="radio" title="No colour" aria-label="No colour"></button>

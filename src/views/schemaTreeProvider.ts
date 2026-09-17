@@ -35,7 +35,10 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
 
   getChildren(node?: SchemaNode): Promise<SchemaNode[]> {
     if (!node) {
-      return this.buildConnectionNodes();
+      return this.buildRootNodes();
+    }
+    if (node.kind === 'connectionGroup') {
+      return Promise.resolve(this.buildConnectionNodes(node.groupName ?? ''));
     }
     if (node.kind === 'connection') {
       return this.buildNamespaceNodes(node);
@@ -55,21 +58,38 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     return Promise.resolve([]);
   }
 
-  private buildConnectionNodes(): Promise<SchemaNode[]> {
+  /** Grouped connections sit in folders (alphabetical), the ungrouped ones follow in their order. */
+  private buildRootNodes(): Promise<SchemaNode[]> {
+    const connections = this.visibleConnections();
+    const groups = [...new Set(connections.map((connection) => groupOf(connection)).filter(Boolean))].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    const folders = groups.map((group) => {
+      const node = new SchemaNode('connectionGroup', group, vscode.TreeItemCollapsibleState.Expanded, '');
+      node.groupName = group;
+      node.iconPath = new vscode.ThemeIcon('folder');
+      node.description = String(connections.filter((connection) => groupOf(connection) === group).length);
+      return node;
+    });
+    return Promise.resolve([...folders, ...this.buildConnectionNodes('')]);
+  }
+
+  private visibleConnections(): ConnectionConfig[] {
     // An empty/unset visibility list means "show all".
     const visible = this.context.workspaceState.get<string[]>(VISIBLE_CONNECTIONS_KEY, []);
-    const connections = this.manager
-      .getConnections()
-      .filter((connection) => visible.length === 0 || visible.includes(connection.name));
-    return Promise.resolve(
-      connections.map((connection) => {
+    return this.manager.getConnections().filter((connection) => visible.length === 0 || visible.includes(connection.name));
+  }
+
+  private buildConnectionNodes(group: string): SchemaNode[] {
+    return this.visibleConnections()
+      .filter((connection) => groupOf(connection) === group)
+      .map((connection) => {
         // The colour rides on the icon, so the label stays the bare connection name.
         const node = new SchemaNode('connection', connection.name, Collapsed, connection.name);
         node.description = `${connection.driver} · ${describeSource(connection)}`;
         node.iconPath = getConnectionIcon(connection);
         return node;
-      }),
-    );
+      });
   }
 
   private async buildNamespaceNodes(parent: SchemaNode): Promise<SchemaNode[]> {
@@ -328,6 +348,10 @@ const OBJECT_ICONS: Record<SchemaObjectKind, string> = {
   trigger: 'zap',
   sequence: 'list-ordered',
 };
+
+function groupOf(connection: ConnectionConfig): string {
+  return connection.group?.trim() ?? '';
+}
 
 /** What a connection points at: the database file for SQLite, the server host otherwise. */
 function describeSource(connection: ConnectionConfig): string {

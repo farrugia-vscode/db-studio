@@ -13,6 +13,8 @@ export interface ConnectionConfig {
   filePath?: string;
   /** Optional colored-dot emoji shown before the connection name in the tree (e.g. `🔵`). */
   icon?: string;
+  /** Optional folder the connection is filed under in the tree (e.g. `Clients`, `Staging`). */
+  group?: string;
   /** When true, the connection blocks every write (edits, commits, DDL). Undefined = writable. */
   isReadOnly?: boolean;
 }

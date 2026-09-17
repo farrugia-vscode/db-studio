@@ -6,6 +6,8 @@ export interface FormInitMessage {
   isEdit: boolean;
   /** Existing values to prefill (never includes the password). */
   connection: Partial<ConnectionConfig>;
+  /** Group names already in use, suggested while typing. */
+  groups: string[];
 }
 
 /** Result of a connection test, pushed back to the form. */

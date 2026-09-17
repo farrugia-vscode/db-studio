@@ -155,6 +155,16 @@
         "command": "dbStudio.copyDdl",
         "title": "Copy DDL",
         "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.moveConnectionUp",
+        "title": "Move Up",
+        "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.moveConnectionDown",
+        "title": "Move Down",
+        "category": "DB Studio"
       }
     ],
     "menus": {
@@ -295,6 +305,16 @@
           "command": "dbStudio.copyDdl",
           "when": "view == dbStudio.explorer && viewItem =~ /^(table|object)$/",
           "group": "3_copy@2"
+        },
+        {
+          "command": "dbStudio.moveConnectionUp",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "2_order@1"
+        },
+        {
+          "command": "dbStudio.moveConnectionDown",
+          "when": "view == dbStudio.explorer && viewItem == connection",
+          "group": "2_order@2"
         }
       ],
       "commandPalette": [
@@ -308,6 +328,14 @@
         },
         {
           "command": "dbStudio.copyDdl",
+          "when": "false"
+        },
+        {
+          "command": "dbStudio.moveConnectionUp",
+          "when": "false"
+        },
+        {
+          "command": "dbStudio.moveConnectionDown",
           "when": "false"
         }
       ]
@@ -356,6 +384,10 @@
               "icon": {
                 "type": "string",
                 "description": "Optional colored-dot emoji shown before the connection name (e.g. 🔵)."
+              },
+              "group": {
+                "type": "string",
+                "description": "Optional folder the connection is filed under in the tree."
               }
             }
           }
