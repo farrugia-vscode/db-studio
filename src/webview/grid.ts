@@ -6,6 +6,7 @@ import {
   dateInputType,
   enumValues,
   isDateColumn,
+  isNumericColumn,
   isPlainTextColumn,
   valueEditorFor,
   whereLiteral,
@@ -17,8 +18,10 @@ import {
   FK_SVG,
   FUNNEL_SVG,
   INDEX_SVG,
+  MENU_EMPTY_SVG,
   MENU_FILTER_SVG,
   MENU_GOTO_SVG,
+  MENU_NULL_SVG,
   MENU_RESTORE_SVG,
   MENU_ROWS_SVG,
   MENU_TRASH_SVG,
@@ -1750,9 +1753,11 @@ function onGridContextMenu(event: MouseEvent): void {
   if (!model || !column) {
     return;
   }
-  const rowAction = selectedRows.has(Number(td.dataset.r)) ? rowSelectionAction() : null;
+  const clicked = { r: Number(td.dataset.r), c: Number(td.dataset.c) };
+  const rowAction = selectedRows.has(clicked.r) ? rowSelectionAction() : null;
   const actions: NavAction[] = [
     ...(rowAction ? [rowAction] : []),
+    ...cellValueActions(clicked, model, column),
     {
       label: `Apply in WHERE  (${column.name})`,
       icon: MENU_FILTER_SVG,
@@ -1762,6 +1767,55 @@ function onGridContextMenu(event: MouseEvent): void {
   ];
   event.preventDefault();
   showCellMenu(event.clientX, event.clientY, actions);
+}
+
+// Explicit NULL / empty string, since typing nothing into a nullable cell always means NULL.
+// Empty strings only make sense in text-like columns. The action covers the whole selection
+// when the clicked cell is part of it.
+function cellValueActions(clicked: GridCell, model: RowModel, column: ColumnMeta): NavAction[] {
+  if (!isCellEditable(model, column)) {
+    return [];
+  }
+  const targets = valueActionTargets(clicked);
+  const count = targets.length;
+  const suffix = count > 1 ? `  (${count} cells)` : '';
+  const actions: NavAction[] = [];
+  if (column.isNullable) {
+    actions.push({ label: `Set NULL${suffix}`, icon: MENU_NULL_SVG, run: () => setCellsTo(targets, null) });
+  }
+  if (isPlainTextColumn(column.type) && !isNumericColumn(column.type)) {
+    actions.push({ label: `Set empty string${suffix}`, icon: MENU_EMPTY_SVG, run: () => setCellsTo(targets, '') });
+  }
+  return actions;
+}
+
+// The cells a value action applies to: the row selection's column, the cell rectangle, or the
+// clicked cell alone. Only cells of the clicked column count, so one action means one type.
+function valueActionTargets(clicked: GridCell): GridCell[] {
+  if (selectedRows.has(clicked.r)) {
+    return [...selectedRows].sort((a, b) => a - b).map((r) => ({ r, c: clicked.c }));
+  }
+  const rect = selRect();
+  if (rect && clicked.r >= rect.r1 && clicked.r <= rect.r2 && clicked.c >= rect.c1 && clicked.c <= rect.c2) {
+    return rectCells(rect).filter((cell) => cell.c === clicked.c);
+  }
+  return [clicked];
+}
+
+// Write `value` as-is into every editable target (no empty → NULL coercion here: that is the point).
+function setCellsTo(cells: GridCell[], value: CellValue): void {
+  cellMenu.hidden = true;
+  pushUndo();
+  for (const { r, c } of cells) {
+    const model = rowModels[r];
+    const column = renderColumns[c];
+    if (model && column && isCellEditable(model, column)) {
+      model.values[column.name] = value;
+    }
+  }
+  render();
+  renderSelection();
+  refreshPending();
 }
 
 // "Delete N rows" (or "Restore" when every selected row is already marked) for the row selection.

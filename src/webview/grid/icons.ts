@@ -20,3 +20,9 @@ export const MENU_TRASH_SVG =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10"/><path d="M6.5 4.5v-1h3v1"/><path d="M4.5 4.5 5 13h6l.5-8.5"/><path d="M6.8 7v4M9.2 7v4"/></svg>';
 export const MENU_RESTORE_SVG =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M3 3v3h3"/></svg>';
+
+// Value actions: a struck-out circle for NULL, an empty pair of quotes for the empty string.
+export const MENU_NULL_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M4.5 11.5 11.5 4.5"/></svg>';
+export const MENU_EMPTY_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M5 4.5v3M6.8 4.5v3M9.2 4.5v3M11 4.5v3"/><path d="M4 12h8"/></svg>';
