@@ -70,6 +70,15 @@ export class MysqlDriver implements DatabaseDriver {
     return rows.map((row) => String(row.name));
   }
 
+  async estimateRowCounts(namespace: string): Promise<Map<string, number>> {
+    const rows = await this.select(
+      `SELECT table_name AS name, table_rows AS estimate FROM information_schema.tables
+       WHERE table_schema = ? AND table_type = 'BASE TABLE' AND table_rows IS NOT NULL`,
+      [namespace],
+    );
+    return new Map(rows.map((row) => [String(row.name), Number(row.estimate)]));
+  }
+
   async listColumns(namespace: string, table: string): Promise<ColumnMeta[]> {
     const rows = await this.select(
       `SELECT column_name AS name, column_type AS type, is_nullable AS nullable, column_key AS keyType,

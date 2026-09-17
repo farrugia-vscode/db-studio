@@ -25,6 +25,11 @@ export interface SchemaIntrospector {
   /** Databases (MySQL) or schemas (PostgreSQL). */
   listNamespaces(): Promise<string[]>;
   listTables(namespace: string): Promise<string[]>;
+  /**
+   * Approximate row count per table from the engine's statistics (never a COUNT(*)); tables
+   * without statistics are absent, and an engine without any returns an empty map.
+   */
+  estimateRowCounts(namespace: string): Promise<Map<string, number>>;
   listColumns(namespace: string, table: string): Promise<ColumnMeta[]>;
   listIndexes(namespace: string, table: string): Promise<IndexMeta[]>;
   listForeignKeys(namespace: string, table: string): Promise<ForeignKeyMeta[]>;

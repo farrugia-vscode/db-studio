@@ -3,6 +3,7 @@ import { ConnectionManager } from '../connections/connectionManager';
 import type { ColumnMeta, ConnectionConfig, ForeignKeyMeta, IndexMeta, SchemaObjectKind } from '../domain/types';
 import { GroupKind, SchemaNode, TablePartKind } from './schemaNode';
 import { getConnectionIcon } from './connectionIcon';
+import { formatRowCount } from '../domain/rowCount';
 
 const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
 const None = vscode.TreeItemCollapsibleState.None;
@@ -88,12 +89,14 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
   private async buildNamespaceChildren(parent: SchemaNode): Promise<SchemaNode[]> {
     const driver = await this.manager.getDriver(parent.connectionName);
     const namespace = parent.namespace!;
-    const [tables, views, routines, triggers, sequences] = await Promise.all([
+    const showRowCounts = vscode.workspace.getConfiguration('dbStudio').get<boolean>('showRowCounts', true);
+    const [tables, views, routines, triggers, sequences, rowCounts] = await Promise.all([
       driver.listTables(namespace),
       driver.listViews(namespace),
       driver.listRoutines(namespace),
       driver.listTriggers(namespace),
       driver.listSequences(namespace),
+      showRowCounts ? driver.estimateRowCounts(namespace).catch(() => new Map<string, number>()) : new Map<string, number>(),
     ]);
     const procedures = routines.filter((routine) => routine.kind === 'procedure').length;
     const functions = routines.filter((routine) => routine.kind === 'function').length;
@@ -105,6 +108,11 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     const nodes = tables.map((table) => {
       const node = new SchemaNode('table', table, tableState, parent.connectionName, namespace, table);
       node.iconPath = new vscode.ThemeIcon('table');
+      const estimate = rowCounts.get(table);
+      if (estimate !== undefined) {
+        node.description = `~${formatRowCount(estimate)}`;
+        node.tooltip = `${table}  ·  about ${estimate.toLocaleString()} rows (from the engine's statistics)`;
+      }
       // No row command on purpose: a click/double-click never opens the grid (and never
       // fights the expand toggle). Open the data via the inline "Open Table Data" action.
       return node;

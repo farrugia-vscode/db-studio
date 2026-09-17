@@ -90,6 +90,11 @@ export class SqliteDriver implements DatabaseDriver {
     return this.listMasterNames(namespace, 'view');
   }
 
+  /** SQLite keeps no row statistics and a COUNT(*) would block the host on big tables. */
+  async estimateRowCounts(): Promise<Map<string, number>> {
+    return new Map();
+  }
+
   async listTriggers(namespace: string): Promise<string[]> {
     return this.listMasterNames(namespace, 'trigger');
   }

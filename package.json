@@ -369,6 +369,11 @@
           "type": "boolean",
           "default": true,
           "description": "Make table nodes expandable to show Columns / Keys / Foreign keys / Indexes. Disable to make tables non-expandable (a double-click then only opens the data, never toggles a submenu)."
+        },
+        "dbStudio.showRowCounts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an approximate row count next to each table (from the engine's statistics, never a COUNT). SQLite keeps no statistics."
         }
       }
     }

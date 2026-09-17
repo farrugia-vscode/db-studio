@@ -77,6 +77,18 @@ export class PostgresDriver implements DatabaseDriver {
     return result.rows.map((row) => row.name);
   }
 
+  // reltuples is -1 (or 0) until the table has been analyzed/vacuumed: those stay unknown.
+  async estimateRowCounts(namespace: string): Promise<Map<string, number>> {
+    await this.connect();
+    const result = await this.client!.query<{ name: string; estimate: number }>(
+      `SELECT c.relname AS name, c.reltuples::bigint AS estimate
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relkind IN ('r', 'p') AND c.reltuples >= 0`,
+      [namespace],
+    );
+    return new Map(result.rows.map((row) => [row.name, Number(row.estimate)]));
+  }
+
   async listColumns(namespace: string, table: string): Promise<ColumnMeta[]> {
     await this.connect();
     const result = await this.client!.query<{
