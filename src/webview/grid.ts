@@ -446,13 +446,16 @@ function onGridShortcut(event: KeyboardEvent): void {
     redo();
     return;
   }
-  if (!selRect()) {
-    return;
-  }
+  // Copy works on a row selection too; fill-down and paste need a cell rectangle.
   if (key === 'c') {
     event.preventDefault();
     copySelection();
-  } else if (key === 'd') {
+    return;
+  }
+  if (!selRect()) {
+    return;
+  }
+  if (key === 'd') {
     event.preventDefault();
     fillDown();
   } else if (key === 'v') {
@@ -556,14 +559,16 @@ function rectCells(rect: { r1: number; r2: number; c1: number; c2: number }): Gr
 }
 
 // Copy the selected rows as new pending inserts (auto-increment keys cleared so the DB assigns them).
+// Rows selected from the gutter (possibly non-contiguous) or the rows of the cell rectangle.
 function duplicateSelectedRows(above: boolean): void {
   const rect = selRect();
-  if (!rect || !hasPrimaryKey) {
+  const sources = selectedRows.size > 0 ? sortedSelectedRows() : rect ? rowIndexes(rect.r1, rect.r2) : [];
+  if (sources.length === 0 || !hasPrimaryKey) {
     return;
   }
   pushUndo();
   const copies: RowModel[] = [];
-  for (let r = rect.r1; r <= rect.r2; r += 1) {
+  for (const r of sources) {
     const source = rowModels[r];
     if (!source) {
       continue;
@@ -579,11 +584,19 @@ function duplicateSelectedRows(above: boolean): void {
   if (copies.length === 0) {
     return;
   }
-  const insertAt = above ? rect.r1 : rect.r2 + 1;
+  // The copies land as one block above the first source or below the last one.
+  const insertAt = above ? sources[0] : sources[sources.length - 1] + 1;
   rowModels.splice(insertAt, 0, ...copies);
   render();
-  selAnchor = { r: insertAt, c: rect.c1 };
-  selFocus = { r: insertAt + copies.length - 1, c: rect.c2 };
+  if (selectedRows.size > 0) {
+    // Keep working on the copies: they become the row selection.
+    selectedRows = rowRange(insertAt, insertAt + copies.length - 1);
+    rowAnchor = insertAt;
+    rowFocus = insertAt + copies.length - 1;
+  } else if (rect) {
+    selAnchor = { r: insertAt, c: rect.c1 };
+    selFocus = { r: insertAt + copies.length - 1, c: rect.c2 };
+  }
   renderSelection();
   refreshPending();
 }
@@ -770,20 +783,43 @@ function renderSelection(): void {
   }
 }
 
+// Copies whole rows when rows are selected from the gutter, otherwise the cell rectangle.
 function copySelection(): void {
-  const rect = selRect();
-  if (!rect) {
+  const data = selectionData();
+  if (!data) {
     return;
   }
-  const data = rangeData(rect);
   api.postMessage({ type: 'copy', format: chosenFormat(), columns: data.columns, rows: data.rows });
 }
 
 // Export the current selection, or the whole (filtered) result when nothing is selected.
 function exportSelection(): void {
-  const rect = selRect() ?? { r1: 0, r2: rowModels.length - 1, c1: 0, c2: renderColumns.length - 1 };
-  const data = rangeData(rect);
+  const data = selectionData() ?? rangeData(allRows(), { c1: 0, c2: renderColumns.length - 1 });
   api.postMessage({ type: 'export', format: chosenFormat(), columns: data.columns, rows: data.rows });
+}
+
+function selectionData(): { columns: string[]; rows: Array<Array<string | null>> } | null {
+  if (selectedRows.size > 0) {
+    return rangeData(sortedSelectedRows(), { c1: 0, c2: renderColumns.length - 1 });
+  }
+  const rect = selRect();
+  return rect ? rangeData(rowIndexes(rect.r1, rect.r2), rect) : null;
+}
+
+function sortedSelectedRows(): number[] {
+  return [...selectedRows].sort((a, b) => a - b);
+}
+
+function rowIndexes(from: number, to: number): number[] {
+  const rows: number[] = [];
+  for (let r = from; r <= to; r += 1) {
+    rows.push(r);
+  }
+  return rows;
+}
+
+function allRows(): number[] {
+  return rowIndexes(0, rowModels.length - 1);
 }
 
 function chosenFormat(): CopyFormat {
@@ -791,18 +827,21 @@ function chosenFormat(): CopyFormat {
 }
 
 // Column names and cell values for a rectangle, skipping rows hidden by a local filter.
-function rangeData(rect: { r1: number; r2: number; c1: number; c2: number }): {
+function rangeData(
+  rowsWanted: number[],
+  span: { c1: number; c2: number },
+): {
   columns: string[];
   rows: Array<Array<string | null>>;
 } {
   const columns: string[] = [];
-  for (let c = rect.c1; c <= rect.c2; c += 1) {
+  for (let c = span.c1; c <= span.c2; c += 1) {
     if (renderColumns[c]) {
       columns.push(renderColumns[c].name);
     }
   }
   const rows: Array<Array<string | null>> = [];
-  for (let r = rect.r1; r <= rect.r2; r += 1) {
+  for (const r of rowsWanted) {
     const model = rowModels[r];
     if (model && rowPassesFilters(model)) {
       rows.push(columns.map((name) => model.values[name]));
@@ -1593,7 +1632,15 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
         input.blur();
         stepSelectionAfterCommit(event.key === 'Enter' ? { r: 1, c: 0 } : { r: 0, c: event.shiftKey ? -1 : 1 });
       } else if (event.key === 'Escape') {
-        bulkCells = null; // cancel any pending bulk fill
+        if (bulkCells) {
+          // A bulk edit was mirrored live into other cells: the undo snapshot taken when the edit
+          // started is the only thing that restores them all.
+          bulkCells = null;
+          input.readOnly = true;
+          input.blur();
+          undo();
+          return;
+        }
         model.values[column.name] = value;
         if (!dateType) {
           input.value = value ?? '';
