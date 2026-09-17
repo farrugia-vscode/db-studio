@@ -677,9 +677,25 @@ tr.deleted td {
   background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 22%, transparent) !important;
 }
 
+/* The gutter doubles as the row-selection handle. */
 td.actions {
   text-align: center;
   overflow: visible;
+  cursor: pointer;
+  user-select: none;
+}
+
+tr.row-sel:not(.deleted) td {
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground, #094771) 28%, transparent) !important;
+}
+
+tr.row-sel td.actions {
+  box-shadow: inset 3px 0 0 var(--vscode-focusBorder);
+}
+
+tr.row-sel .row-num {
+  color: var(--vscode-foreground);
+  font-weight: 600;
 }
 
 .row-num {

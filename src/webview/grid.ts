@@ -95,8 +95,21 @@ let orderBy = '';
 let selAnchor: { r: number; c: number } | null = null;
 let selFocus: { r: number; c: number } | null = null;
 let selecting = false;
-// When editing was started on a multi-cell selection, the committed value fills this whole region.
-let bulkRect: { r1: number; r2: number; c1: number; c2: number } | null = null;
+// Whole-row selection driven by the gutter (line numbers): click, Shift/drag for a range,
+// Ctrl/Cmd+click to toggle rows. Backspace deletes them; editing a cell in one of them edits them all.
+let selectedRows = new Set<number>();
+let rowAnchor: number | null = null;
+let rowSelecting = false;
+// Rows already selected when a Ctrl+drag started, so the drag adds to them instead of replacing them.
+let rowSelectionBase: Set<number> | null = null;
+// When editing was started on a multi-cell selection (or on a row selection), the committed value
+// fills every one of these cells.
+let bulkCells: GridCell[] | null = null;
+
+interface GridCell {
+  r: number;
+  c: number;
+}
 
 // Grid-level undo/redo of structural edits (cell change, add/delete row, fill, paste).
 // In-cell text editing keeps the field's own native undo while the input is focused.
@@ -150,6 +163,8 @@ grid.addEventListener('mousedown', onGridMouseDown);
 grid.addEventListener('mousemove', onGridMouseMove);
 document.addEventListener('mouseup', () => {
   selecting = false;
+  rowSelecting = false;
+  rowSelectionBase = null;
 });
 document.addEventListener('keydown', onGridKeydown);
 grid.addEventListener('contextmenu', onGridContextMenu);
@@ -226,11 +241,25 @@ document.addEventListener('keydown', (event) => {
 });
 
 function onGridMouseDown(event: MouseEvent): void {
-  const td = (event.target as HTMLElement).closest('td[data-r]') as HTMLTableCellElement | null;
+  const target = event.target as HTMLElement;
+  if (target.closest('button')) {
+    return; // the × button acts on click; a press on it must not start a selection
+  }
+  const gutter = target.closest('td[data-row]') as HTMLTableCellElement | null;
+  if (gutter) {
+    onGutterMouseDown(event, Number(gutter.dataset.row));
+    return;
+  }
+  const td = target.closest('td[data-r]') as HTMLTableCellElement | null;
   if (!td) {
     return;
   }
   const cell = { r: Number(td.dataset.r), c: Number(td.dataset.c) };
+  // Clicking a cell drops the row selection, unless the cell sits in a selected row: then the rows
+  // stay selected so an edit on that cell applies to every one of them.
+  if (!selectedRows.has(cell.r)) {
+    clearRowSelection();
+  }
   if (event.shiftKey && selAnchor) {
     selFocus = cell;
   } else {
@@ -241,13 +270,57 @@ function onGridMouseDown(event: MouseEvent): void {
   renderSelection();
 }
 
+function onGutterMouseDown(event: MouseEvent, r: number): void {
+  selAnchor = null;
+  selFocus = null;
+  if (event.shiftKey && rowAnchor !== null) {
+    rowSelectionBase = null;
+    selectedRows = rowRange(rowAnchor, r);
+  } else if (event.ctrlKey || event.metaKey) {
+    rowSelectionBase = new Set(selectedRows);
+    if (selectedRows.has(r)) {
+      selectedRows.delete(r);
+    } else {
+      selectedRows.add(r);
+    }
+    rowAnchor = r;
+  } else {
+    rowSelectionBase = null;
+    selectedRows = new Set([r]);
+    rowAnchor = r;
+  }
+  rowSelecting = true;
+  renderSelection();
+}
+
+function rowRange(from: number, to: number): Set<number> {
+  const rows = new Set<number>();
+  for (let r = Math.min(from, to); r <= Math.max(from, to); r += 1) {
+    rows.add(r);
+  }
+  return rows;
+}
+
+function clearRowSelection(): void {
+  selectedRows = new Set();
+  rowAnchor = null;
+}
+
 function onGridMouseMove(event: MouseEvent): void {
-  if (!selecting) {
+  const td = (event.target as HTMLElement).closest('td[data-r], td[data-row]') as HTMLTableCellElement | null;
+  if (!td) {
     return;
   }
-  const td = (event.target as HTMLElement).closest('td[data-r]') as HTMLTableCellElement | null;
-  if (td) {
-    selFocus = { r: Number(td.dataset.r), c: Number(td.dataset.c) };
+  const r = Number(td.dataset.row ?? td.dataset.r);
+  if (rowSelecting && rowAnchor !== null) {
+    // Dragging from the gutter sweeps a range (over the numbers or across the cells); with Ctrl it
+    // is added to what was already selected.
+    selectedRows = new Set([...(rowSelectionBase ?? []), ...rowRange(rowAnchor, r)]);
+    renderSelection();
+    return;
+  }
+  if (selecting && td.dataset.r !== undefined) {
+    selFocus = { r, c: Number(td.dataset.c) };
     renderSelection();
   }
 }
@@ -267,7 +340,21 @@ function onGridKeydown(event: KeyboardEvent): void {
     onGridShortcut(event);
     return;
   }
-  if (editing || !selRect()) {
+  if (editing) {
+    return;
+  }
+  // A row selection owns Backspace/Delete (delete the rows) and Escape (drop the selection).
+  if (selectedRows.size > 0 && (event.key === 'Delete' || event.key === 'Backspace')) {
+    event.preventDefault();
+    deleteSelectedRows();
+    return;
+  }
+  if (selectedRows.size > 0 && event.key === 'Escape') {
+    clearRowSelection();
+    renderSelection();
+    return;
+  }
+  if (!selRect()) {
     return;
   }
   // Duplicate the selected row(s) as pending inserts (VS Code's Shift+Alt+↓/↑ "copy line").
@@ -342,7 +429,7 @@ function beginSelectionEdit(seed: string | null): void {
   if (!isPlainTextColumn(column)) {
     return;
   }
-  bulkRect = rect.r1 !== rect.r2 || rect.c1 !== rect.c2 ? { ...rect } : null;
+  bulkCells = bulkTargetsFor(lead) ?? (rect.r1 !== rect.r2 || rect.c1 !== rect.c2 ? rectCells(rect) : null);
   pushUndo();
   input.readOnly = false;
   if (seed !== null) {
@@ -361,7 +448,53 @@ function clearSelectionCells(): void {
     return;
   }
   pushUndo();
-  applyBulkEdit(rect, '');
+  applyBulkEdit(rectCells(rect), '');
+}
+
+// Backspace/Delete on a row selection marks the rows deleted (uncommitted inserts are just dropped).
+// When every selected row is already marked, the key restores them instead, like the × button.
+function deleteSelectedRows(): void {
+  if (!hasPrimaryKey || selectedRows.size === 0) {
+    return;
+  }
+  pushUndo();
+  const targets = [...selectedRows].map((r) => rowModels[r]).filter((model): model is RowModel => model !== undefined);
+  const isRestore = targets.every((model) => model.deleted);
+  const dropped = new Set<RowModel>();
+  for (const model of targets) {
+    if (model.original === null) {
+      dropped.add(model);
+    } else {
+      model.deleted = !isRestore;
+    }
+  }
+  if (dropped.size > 0) {
+    // Row indices shift once inserts are removed, so the selection can't be kept.
+    rowModels = rowModels.filter((model) => !dropped.has(model));
+    clearRowSelection();
+  }
+  render();
+  renderSelection();
+  refreshPending();
+}
+
+// Editing a cell of a selected row edits that column in every selected row (Ctrl-picked rows
+// included); null when the cell is outside the row selection or the selection is a single row.
+function bulkTargetsFor(cell: GridCell): GridCell[] | null {
+  if (selectedRows.size < 2 || !selectedRows.has(cell.r)) {
+    return null;
+  }
+  return [...selectedRows].sort((a, b) => a - b).map((r) => ({ r, c: cell.c }));
+}
+
+function rectCells(rect: { r1: number; r2: number; c1: number; c2: number }): GridCell[] {
+  const cells: GridCell[] = [];
+  for (let r = rect.r1; r <= rect.r2; r += 1) {
+    for (let c = rect.c1; c <= rect.c2; c += 1) {
+      cells.push({ r, c });
+    }
+  }
+  return cells;
 }
 
 // Copy the selected rows as new pending inserts (auto-increment keys cleared so the DB assigns them).
@@ -397,51 +530,39 @@ function duplicateSelectedRows(above: boolean): void {
   refreshPending();
 }
 
-// Fill every editable cell in `rect` with `raw`, then restore the selection.
-function applyBulkEdit(rect: { r1: number; r2: number; c1: number; c2: number }, raw: string): void {
-  for (let r = rect.r1; r <= rect.r2; r += 1) {
+// Fill every editable cell of `cells` with `raw`, then re-render keeping the selection.
+function applyBulkEdit(cells: GridCell[], raw: string): void {
+  for (const { r, c } of cells) {
     const model = rowModels[r];
-    if (!model) {
-      continue;
-    }
-    for (let c = rect.c1; c <= rect.c2; c += 1) {
-      const column = renderColumns[c];
-      if (column && isCellEditable(model, column)) {
-        setCellValue(model, column, raw);
-      }
+    const column = renderColumns[c];
+    if (model && column && isCellEditable(model, column)) {
+      setCellValue(model, column, raw);
     }
   }
   render();
-  selAnchor = { r: rect.r1, c: rect.c1 };
-  selFocus = { r: rect.r2, c: rect.c2 };
   renderSelection();
   refreshPending();
 }
 
-// Live mirror of the lead cell's value into every editable cell of `rect` while typing.
+// Live mirror of the lead cell's value into every editable cell of `cells` while typing.
 // Updates each cell's model, its display input and null/dirty state without a full re-render
 // (which would drop focus). The blur handler still normalizes via applyBulkEdit.
-function propagateBulkLive(rect: { r1: number; r2: number; c1: number; c2: number }, raw: string): void {
-  for (let r = rect.r1; r <= rect.r2; r += 1) {
+function propagateBulkLive(cells: GridCell[], raw: string): void {
+  for (const { r, c } of cells) {
     const model = rowModels[r];
-    if (!model) {
+    const column = renderColumns[c];
+    if (!model || !column || !isCellEditable(model, column) || !isPlainTextColumn(column)) {
       continue;
     }
-    for (let c = rect.c1; c <= rect.c2; c += 1) {
-      const column = renderColumns[c];
-      if (!column || !isCellEditable(model, column) || !isPlainTextColumn(column)) {
-        continue;
-      }
-      setCellValue(model, column, raw);
-      const cell = grid.querySelector<HTMLTableCellElement>(`td[data-r="${r}"][data-c="${c}"]`);
-      const input = cell?.querySelector('input');
-      if (input instanceof HTMLInputElement && input !== document.activeElement) {
-        input.value = raw;
-        input.classList.toggle('null', model.values[column.name] === null);
-      }
-      if (cell) {
-        applyCellState(cell, model, column);
-      }
+    setCellValue(model, column, raw);
+    const cell = grid.querySelector<HTMLTableCellElement>(`td[data-r="${r}"][data-c="${c}"]`);
+    const input = cell?.querySelector('input');
+    if (input instanceof HTMLInputElement && input !== document.activeElement) {
+      input.value = raw;
+      input.classList.toggle('null', model.values[column.name] === null);
+    }
+    if (cell) {
+      applyCellState(cell, model, column);
     }
   }
 }
@@ -591,6 +712,7 @@ function restoreModels(models: RowModel[]): void {
   rowModels = models;
   selAnchor = null;
   selFocus = null;
+  clearRowSelection();
   render();
   refreshPending();
 }
@@ -613,6 +735,9 @@ function renderSelection(): void {
     const r = Number(td.dataset.r);
     const c = Number(td.dataset.c);
     td.classList.toggle('sel', rect !== null && r >= rect.r1 && r <= rect.r2 && c >= rect.c1 && c <= rect.c2);
+  }
+  for (const tr of grid.querySelectorAll<HTMLTableRowElement>('tbody tr[data-r]')) {
+    tr.classList.toggle('row-sel', selectedRows.has(Number(tr.dataset.r)));
   }
 }
 
@@ -850,6 +975,7 @@ function loadData(nextColumns: ColumnMeta[], nextPkColumns: string[], rows: Row[
   colMenu.hidden = true;
   undoStack = [];
   redoStack = [];
+  clearRowSelection();
   notice.classList.remove('error');
   notice.textContent = readOnly
     ? 'Read-only connection: editing is disabled.'
@@ -1167,6 +1293,7 @@ function selectColumn(colIndex: number): void {
     return;
   }
   // Anchor at the bottom, focus (lead) at the top so typing edits the first row.
+  clearRowSelection();
   selAnchor = { r: rowModels.length - 1, c: colIndex };
   selFocus = { r: 0, c: colIndex };
   renderSelection();
@@ -1383,7 +1510,8 @@ function rowPassesFilters(model: RowModel): boolean {
 function buildRow(model: RowModel, rowIndex: number, lineNumber: number): HTMLTableRowElement {
   const row = document.createElement('tr');
   applyRowState(row, model);
-  row.appendChild(buildDeleteCell(model, row, lineNumber));
+  row.dataset.r = String(rowIndex);
+  row.appendChild(buildDeleteCell(model, row, rowIndex, lineNumber));
   renderColumns.forEach((column, colIndex) => {
     const cell = buildCell(model, column);
     cell.dataset.r = String(rowIndex);
@@ -1393,9 +1521,16 @@ function buildRow(model: RowModel, rowIndex: number, lineNumber: number): HTMLTa
   return row;
 }
 
-function buildDeleteCell(model: RowModel, row: HTMLTableRowElement, lineNumber: number): HTMLTableCellElement {
+function buildDeleteCell(
+  model: RowModel,
+  row: HTMLTableRowElement,
+  rowIndex: number,
+  lineNumber: number,
+): HTMLTableCellElement {
   const cell = document.createElement('td');
   cell.className = 'actions';
+  // The gutter is the row-selection handle (see onGutterMouseDown).
+  cell.dataset.row = String(rowIndex);
   const number = document.createElement('span');
   number.className = 'row-num';
   number.textContent = String(lineNumber);
@@ -1409,6 +1544,11 @@ function buildDeleteCell(model: RowModel, row: HTMLTableRowElement, lineNumber: 
   button.textContent = '×';
   button.title = 'Delete row';
   button.addEventListener('click', () => {
+    // Inside a row selection the × acts on the whole selection.
+    if (selectedRows.has(rowIndex)) {
+      deleteSelectedRows();
+      return;
+    }
     pushUndo();
     if (model.original === null) {
       // Uncommitted new row → just drop it, no "marked for deletion" state.
@@ -1464,8 +1604,8 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     applyCellState(cell, model, column);
     // Multi-cell selection: mirror the lead cell into every selected cell live, so the whole
     // region visibly edits together instead of only committing on blur.
-    if (bulkRect) {
-      propagateBulkLive(bulkRect, input.value);
+    if (bulkCells) {
+      propagateBulkLive(bulkCells, input.value);
     }
     refreshPending();
   });
@@ -1479,10 +1619,10 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
       input.value = formatDate(model.values[column.name], dateLocale);
     }
     // Editing started on a multi-cell selection → fill the whole region with the committed value.
-    if (bulkRect) {
-      const rect = bulkRect;
-      bulkRect = null;
-      applyBulkEdit(rect, model.values[column.name] ?? '');
+    if (bulkCells) {
+      const cells = bulkCells;
+      bulkCells = null;
+      applyBulkEdit(cells, model.values[column.name] ?? '');
     }
   });
 
@@ -1503,6 +1643,8 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
       } else if (fk) {
         openFkPopup(fk, column, input);
       } else {
+        // Double-clicking a cell of a selected row edits that column in every selected row.
+        bulkCells = bulkTargetsFor({ r: Number(cell.dataset.r), c: Number(cell.dataset.c) });
         beginInlineEdit(input);
       }
     });
@@ -1510,7 +1652,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
       if (event.key === 'Enter') {
         input.blur();
       } else if (event.key === 'Escape') {
-        bulkRect = null; // cancel any pending bulk fill
+        bulkCells = null; // cancel any pending bulk fill
         model.values[column.name] = value;
         if (!dateType) {
           input.value = value ?? '';
@@ -1870,7 +2012,26 @@ function openFkPopup(fk: ForeignKeyMeta, column: ColumnMeta, input: HTMLInputEle
 }
 
 function onGridContextMenu(event: MouseEvent): void {
-  const td = (event.target as HTMLElement).closest('td[data-r]') as HTMLTableCellElement | null;
+  const target = event.target as HTMLElement;
+  // Right-clicking the gutter targets that row (joining the selection when it is not part of it).
+  const gutter = target.closest('td[data-row]') as HTMLTableCellElement | null;
+  if (gutter) {
+    const r = Number(gutter.dataset.row);
+    if (!selectedRows.has(r)) {
+      selAnchor = null;
+      selFocus = null;
+      selectedRows = new Set([r]);
+      rowAnchor = r;
+      renderSelection();
+    }
+    const rowAction = rowSelectionAction();
+    if (rowAction) {
+      event.preventDefault();
+      showCellMenu(event.clientX, event.clientY, [rowAction]);
+    }
+    return;
+  }
+  const td = target.closest('td[data-r]') as HTMLTableCellElement | null;
   if (!td) {
     return;
   }
@@ -1879,7 +2040,9 @@ function onGridContextMenu(event: MouseEvent): void {
   if (!model || !column) {
     return;
   }
+  const rowAction = selectedRows.has(Number(td.dataset.r)) ? rowSelectionAction() : null;
   const actions: NavAction[] = [
+    ...(rowAction ? [rowAction] : []),
     {
       label: `Apply in WHERE  (${column.name})`,
       icon: MENU_FILTER_SVG,
@@ -1889,6 +2052,24 @@ function onGridContextMenu(event: MouseEvent): void {
   ];
   event.preventDefault();
   showCellMenu(event.clientX, event.clientY, actions);
+}
+
+// "Delete N rows" (or "Restore" when every selected row is already marked) for the row selection.
+function rowSelectionAction(): NavAction | null {
+  if (!hasPrimaryKey || selectedRows.size === 0) {
+    return null;
+  }
+  const targets = [...selectedRows].map((r) => rowModels[r]).filter((model): model is RowModel => model !== undefined);
+  const isRestore = targets.every((model) => model.deleted);
+  const count = targets.length;
+  return {
+    label: `${isRestore ? 'Restore' : 'Delete'} ${count} row${count > 1 ? 's' : ''}`,
+    icon: isRestore ? MENU_RESTORE_SVG : MENU_TRASH_SVG,
+    run: () => {
+      cellMenu.hidden = true;
+      deleteSelectedRows();
+    },
+  };
 }
 
 // Append `col = value` to the WHERE box (AND-joined when a clause is already there), then re-query.
@@ -1925,6 +2106,10 @@ const MENU_GOTO_SVG =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H3.5v9h9V9"/><path d="M9.5 3.5H12.5V6.5"/><path d="M12.5 3.5 7.5 8.5"/></svg>';
 const MENU_ROWS_SVG =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>';
+const MENU_TRASH_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10"/><path d="M6.5 4.5v-1h3v1"/><path d="M4.5 4.5 5 13h6l.5-8.5"/><path d="M6.8 7v4M9.2 7v4"/></svg>';
+const MENU_RESTORE_SVG =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M3 3v3h3"/></svg>';
 
 // Forward: from an FK value → the referenced row. Reverse: from a referenced (PK) value → the rows pointing here.
 function cellNavActions(model: RowModel, column: ColumnMeta): NavAction[] {
