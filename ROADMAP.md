@@ -3,12 +3,13 @@
 Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 
 ## Connections
-- [x] Multi-connection sidebar (MySQL / MariaDB / PostgreSQL)
+- [x] Multi-connection sidebar (MySQL / MariaDB / PostgreSQL / SQLite via `node:sqlite`)
 - [x] Connection form (add + edit, single screen)
 - [x] Test connection button
 - [x] Per-connection color (picker + swatches)
 - [x] Editable name with rename (moves config + secret)
-- [x] Driver icons (🐬 MySQL/MariaDB, 🐘 PostgreSQL)
+- [x] Driver icons (🐬 MySQL/MariaDB, 🐘 PostgreSQL, 📄 SQLite)
+- [x] Read-only connections (every write blocked: grid, console, DDL)
 - [x] Edit / Remove via right-click
 - [x] Duplicate connection (config + password, unique name)
 - [x] Find table / view across schemas (fuzzy quick-pick → opens data)
@@ -27,6 +28,7 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Select which databases/schemas to display per connection
 - [x] Show / hide columns in the data grid (toolbar checklist)
 - [x] Search across the tree via "Find table…" (fuzzy quick-pick)
+- [ ] Refresh a single node, Copy name / Copy DDL, row-count estimate on tables
 
 ## Data grid
 - [x] Editable cells, add + delete rows, Commit (UPDATE / INSERT / DELETE by PK)
@@ -47,13 +49,27 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Sort by column (click header → ASC / DESC / none, server-side)
 - [x] Excel-like rectangular selection (mouse + Shift), fill-down (Ctrl+D), paste (Ctrl+V)
 - [x] Format-aware copy (Ctrl+C → TSV / CSV / JSON / INSERT, chosen in the toolbar)
-- [x] Undo / redo of cell & row edits (Ctrl+Z / Ctrl+Y)
+- [x] Undo / redo of cell & row edits (Ctrl+Z / Ctrl+Y, toolbar buttons)
+- [x] Searchable foreign-key picker (key + descriptive label, server-side search) and enum picker
+- [x] FK / index badges in headers, SQL type under each column name, stable column widths
+- [x] Line-number gutter; row selection (click, drag, Shift, Ctrl) → Backspace deletes, edits apply to every selected row
+- [x] Long text (TEXT/CLOB) and JSON edited in a modal (Esc / Ctrl+Enter)
+- [x] Right-click: apply a cell value in WHERE, delete / restore selected rows
+- [ ] Keyboard navigation between cells (arrows, Tab, Shift+arrows)
+- [ ] Set NULL / set empty string explicitly (empty is coerced to NULL today)
+- [ ] Row selection honoured by copy / export / duplicate
+- [ ] Local text search across the loaded page
 
 ## SQL
 - [x] Run SQL from selection / active `.sql` file / prompt → results grid (tinted)
 - [x] Full SQL console window (per-connection, auto-saved editor, Ctrl+Enter run)
 - [x] Schema-aware autocompletion (tables, columns, keywords; alias-aware `.` columns)
-- [x] Query history (per connection, click a past query to reuse)
+- [x] Query history (per connection, timestamps + row counts, filter, export CSV/MD, clear)
+- [x] One result tab per `;`-separated statement; editable results when the PK is in the result (MySQL)
+- [x] SQL formatter (Alt+Shift+F), syntax highlighting, resizable editor
+- [ ] Execution time per statement, EXPLAIN in one click
+- [ ] Cancel a running query
+- [ ] Named snippets / favourites
 
 ## Import / export
 - [x] Export a table / view to CSV, JSON or SQL inserts (right-click → Export Data)
@@ -70,3 +86,4 @@ each related window (grid, results).
 - [x] TypeScript + esbuild (bundled), SOLID layering
 - [x] Drivers behind segmented interfaces (ISP) + `DriverFactory` (OCP)
 - [x] Edits as Commands + `EditFactory`
+- [ ] Split `grid.ts` into modules; unit tests (`bun test`) on the pure logic
