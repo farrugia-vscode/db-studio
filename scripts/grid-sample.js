@@ -1,0 +1,32 @@
+// Sample payload for the grid harness: a small "products" table with a FK, an enum, JSON and text.
+window.SAMPLE = {
+  namespace: 'shop',
+  table: 'products',
+  columns: [
+    { name: 'id', type: 'int unsigned', isNullable: false, isPrimaryKey: true, isAutoIncrement: true, defaultValue: null },
+    { name: 'name', type: 'varchar(255)', isNullable: false, isPrimaryKey: false, isAutoIncrement: false, defaultValue: null },
+    { name: 'category_id', type: 'int unsigned', isNullable: true, isPrimaryKey: false, isAutoIncrement: false, defaultValue: null },
+    { name: 'status', type: "enum('draft','live','archived')", isNullable: false, isPrimaryKey: false, isAutoIncrement: false, defaultValue: 'draft' },
+    { name: 'price', type: 'decimal(10,2)', isNullable: true, isPrimaryKey: false, isAutoIncrement: false, defaultValue: null },
+    { name: 'attributes', type: 'json', isNullable: true, isPrimaryKey: false, isAutoIncrement: false, defaultValue: null },
+    { name: 'description', type: 'text', isNullable: true, isPrimaryKey: false, isAutoIncrement: false, defaultValue: null },
+    { name: 'created_at', type: 'datetime', isNullable: false, isPrimaryKey: false, isAutoIncrement: false, defaultValue: 'CURRENT_TIMESTAMP' },
+  ],
+  pkColumns: ['id'],
+  foreignKeys: [{ name: 'fk_cat', columns: ['category_id'], refTable: 'categories', refColumns: ['id'] }],
+  incomingForeignKeys: [],
+  indexedColumns: ['id', 'name', 'category_id'],
+  readOnly: false,
+  rows: [
+    { id: 1, name: 'Chair', category_id: 3, status: 'live', price: '49.90', attributes: '{"color":"red","size":"M"}', description: 'A chair.\nSturdy.', created_at: '2026-09-01 10:00:00' },
+    { id: 2, name: 'Table', category_id: 3, status: 'draft', price: null, attributes: null, description: null, created_at: '2026-09-02 11:30:00' },
+    { id: 3, name: 'Lamp', category_id: null, status: 'archived', price: '19.00', attributes: '[1,2]', description: 'Old lamp', created_at: '2026-09-03 09:15:00' },
+    { id: 4, name: 'Desk', category_id: 5, status: 'live', price: '199.00', attributes: null, description: '', created_at: '2026-09-04 08:00:00' },
+  ],
+  total: 4,
+  offset: 0,
+  pageSize: 100,
+  filter: '',
+  orderBy: '',
+  dateLocale: '',
+};

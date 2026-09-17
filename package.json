@@ -2,7 +2,7 @@
   "name": "db-studio",
   "displayName": "DB Studio",
   "description": "PHPStorm-style database explorer: browse schema, run SQL, edit data (MySQL, MariaDB, PostgreSQL, SQLite)",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "publisher": "farrugia",
   "icon": "icon.png",
   "engines": {

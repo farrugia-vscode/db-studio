@@ -4,3 +4,4 @@ media/*.js
 media/*.js.map
 *.vsix
 .DS_Store
+.harness/

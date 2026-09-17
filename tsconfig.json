@@ -2,7 +2,9 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2021",
-    "lib": ["ES2021"],
+    "lib": [
+      "ES2021"
+    ],
     "outDir": "out",
     "rootDir": "src",
     "strict": true,
@@ -14,6 +16,14 @@
     "sourceMap": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["src/webview/**", "node_modules", "out"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/webview/**",
+    "src/**/*.test.ts",
+    "src/test/**",
+    "node_modules",
+    "out"
+  ]
 }

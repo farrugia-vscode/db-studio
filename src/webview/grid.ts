@@ -1,6 +1,41 @@
 import type { CopyFormat, ExtensionToWebview, FkOption, WebviewToExtension } from '../domain/gridProtocol';
 import type { ColumnMeta, ForeignKeyMeta, IncomingForeignKey, Row } from '../domain/types';
-import type { EditDto } from '../domain/edits/edit';
+import { element } from './grid/dom';
+import {
+  compactType,
+  dateInputType,
+  enumValues,
+  isDateColumn,
+  isPlainTextColumn,
+  valueEditorFor,
+  whereLiteral,
+  type ValueEditor,
+} from './grid/columnTypes';
+import { formatDate, fromDateInputValue, toDateInputValue } from './grid/dates';
+import { decodeValue, displayValue, encodeValue } from './grid/filterValues';
+import {
+  FK_SVG,
+  FUNNEL_SVG,
+  INDEX_SVG,
+  MENU_FILTER_SVG,
+  MENU_GOTO_SVG,
+  MENU_RESTORE_SVG,
+  MENU_ROWS_SVG,
+  MENU_TRASH_SVG,
+} from './grid/icons';
+import { parseOrder } from './grid/orderBy';
+import { openEnumPopup, openFkPopup } from './grid/pickers';
+import { openValueModal } from './grid/valueModal';
+import {
+  cloneModels,
+  computeEdits,
+  defaultForNewRow,
+  hasLocalChanges,
+  toCellRow,
+  type CellValue,
+  type GridCell,
+  type RowModel,
+} from './grid/rowModel';
 
 interface VsCodeApi {
   postMessage(message: WebviewToExtension): void;
@@ -8,15 +43,6 @@ interface VsCodeApi {
 declare function acquireVsCodeApi(): VsCodeApi;
 
 const api = acquireVsCodeApi();
-
-type CellValue = string | null;
-
-/** `original === null` marks a row inserted in the grid, not yet persisted. */
-interface RowModel {
-  values: Record<string, CellValue>;
-  original: Record<string, CellValue> | null;
-  deleted: boolean;
-}
 
 let columns: ColumnMeta[] = [];
 // The columns actually shown (ordered by columnOrder, minus the user-hidden ones); rebuilt on each render.
@@ -106,11 +132,6 @@ let rowSelectionBase: Set<number> | null = null;
 // fills every one of these cells.
 let bulkCells: GridCell[] | null = null;
 
-interface GridCell {
-  r: number;
-  c: number;
-}
-
 // Grid-level undo/redo of structural edits (cell change, add/delete row, fill, paste).
 // In-cell text editing keeps the field's own native undo while the input is focused.
 const UNDO_LIMIT = 100;
@@ -135,7 +156,7 @@ function setPendingExpanded(expanded: boolean): void {
 
 function requestEditsPreview(): void {
   clearTimeout(previewTimer);
-  previewTimer = window.setTimeout(() => api.postMessage({ type: 'previewEdits', edits: computeEdits() }), 120);
+  previewTimer = window.setTimeout(() => api.postMessage({ type: 'previewEdits', edits: computeEdits(rowModels, columns, pkColumns) }), 120);
 }
 reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' }));
 // The 'search' event fires on Enter and when the native clear (×) is clicked.
@@ -179,43 +200,6 @@ const filterPop = document.createElement('div');
 filterPop.className = 'filter-pop';
 filterPop.hidden = true;
 document.body.appendChild(filterPop);
-// Floating searchable dropdown for ENUM cell editing.
-const enumPop = document.createElement('div');
-enumPop.className = 'enum-pop';
-enumPop.hidden = true;
-document.body.appendChild(enumPop);
-// Floating searchable dropdown for foreign-key cell editing (key + descriptive label).
-const fkPop = document.createElement('div');
-fkPop.className = 'enum-pop fk-pop';
-fkPop.hidden = true;
-document.body.appendChild(fkPop);
-
-// The cell each dropdown is anchored to, so it can follow the cell when the grid scrolls.
-let enumAnchor: HTMLElement | null = null;
-let fkAnchor: HTMLElement | null = null;
-
-// Keep an open dropdown glued under its cell while the grid scrolls; hide it once the cell scrolls
-// out of view (a fixed-position popup would otherwise drift over unrelated columns).
-function trackPopup(pop: HTMLElement, anchor: HTMLElement | null): void {
-  if (pop.hidden || !anchor) {
-    return;
-  }
-  const rect = anchor.getBoundingClientRect();
-  const visible = rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
-  if (visible) {
-    positionPopupUnder(pop, rect);
-  } else {
-    pop.hidden = true;
-  }
-}
-document.addEventListener(
-  'scroll',
-  () => {
-    trackPopup(enumPop, enumAnchor);
-    trackPopup(fkPop, fkAnchor);
-  },
-  true,
-);
 document.addEventListener('mousedown', (event) => {
   const target = event.target as Node;
   if (!cellMenu.hidden && !cellMenu.contains(target)) {
@@ -223,20 +207,6 @@ document.addEventListener('mousedown', (event) => {
   }
   if (!filterPop.hidden && !filterPop.contains(target) && !(target instanceof HTMLElement && target.closest('.filter-btn'))) {
     filterPop.hidden = true;
-  }
-  if (!enumPop.hidden && !enumPop.contains(target) && !(target instanceof HTMLElement && target.closest('.cell-enum'))) {
-    enumPop.hidden = true;
-  }
-  if (!fkPop.hidden && !fkPop.contains(target) && !(target instanceof HTMLElement && target.closest('td'))) {
-    fkPop.hidden = true;
-  }
-});
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !enumPop.hidden) {
-    enumPop.hidden = true;
-  }
-  if (event.key === 'Escape' && !fkPop.hidden) {
-    fkPop.hidden = true;
   }
 });
 
@@ -421,12 +391,12 @@ function beginSelectionEdit(seed: string | null): void {
   if (!input) {
     return;
   }
-  const valueEditor = valueEditorFor(model, column);
+  const valueEditor = valueEditorFor(column.type, model.values[column.name]);
   if (valueEditor) {
-    openValueModal(valueEditor, model, column, input, input.closest('td')!, seed);
+    editInModal(valueEditor, model, column, input, input.closest('td')!, seed);
     return;
   }
-  if (!isPlainTextColumn(column)) {
+  if (!isPlainTextColumn(column.type)) {
     return;
   }
   bulkCells = bulkTargetsFor(lead) ?? (rect.r1 !== rect.r2 || rect.c1 !== rect.c2 ? rectCells(rect) : null);
@@ -551,7 +521,7 @@ function propagateBulkLive(cells: GridCell[], raw: string): void {
   for (const { r, c } of cells) {
     const model = rowModels[r];
     const column = renderColumns[c];
-    if (!model || !column || !isCellEditable(model, column) || !isPlainTextColumn(column)) {
+    if (!model || !column || !isCellEditable(model, column) || !isPlainTextColumn(column.type)) {
       continue;
     }
     setCellValue(model, column, raw);
@@ -570,27 +540,6 @@ function propagateBulkLive(cells: GridCell[], raw: string): void {
 function isCellEditable(model: RowModel, column: ColumnMeta): boolean {
   const isGenerated = column.isAutoIncrement && model.original === null;
   return hasPrimaryKey && !isGenerated;
-}
-
-function isPlainTextColumn(column: ColumnMeta): boolean {
-  const type = column.type.toLowerCase();
-  return !isDateColumn(type) && !type.includes('json') && enumValues(column.type) === null;
-}
-
-type ValueEditor = 'json' | 'text';
-
-// Which multi-line modal a cell opens, if any: JSON for JSON columns and for text columns holding
-// a JSON-shaped value, plain text for TEXT/CLOB columns. Single-line types edit inline.
-function valueEditorFor(model: RowModel, column: ColumnMeta): ValueEditor | null {
-  if (column.type.toLowerCase().includes('json') || looksLikeJson(model.values[column.name])) {
-    return 'json';
-  }
-  return isLongTextColumn(column) ? 'text' : null;
-}
-
-// TEXT, TINYTEXT…LONGTEXT (MySQL), text/citext (PostgreSQL), TEXT/CLOB (SQLite); never VARCHAR.
-function isLongTextColumn(column: ColumnMeta): boolean {
-  return /text|clob/.test(column.type.toLowerCase());
 }
 
 function setCellValue(model: RowModel, column: ColumnMeta, raw: string): void {
@@ -673,17 +622,9 @@ function onColMenuKeydown(event: KeyboardEvent): void {
   }
 }
 
-function cloneModels(): RowModel[] {
-  return rowModels.map((model) => ({
-    values: { ...model.values },
-    original: model.original ? { ...model.original } : null,
-    deleted: model.deleted,
-  }));
-}
-
 // Snapshot the current grid state before a structural edit, so Ctrl+Z can restore it.
 function pushUndo(): void {
-  undoStack.push(cloneModels());
+  undoStack.push(cloneModels(rowModels));
   if (undoStack.length > UNDO_LIMIT) {
     undoStack.shift();
   }
@@ -695,7 +636,7 @@ function undo(): void {
   if (!previous) {
     return;
   }
-  redoStack.push(cloneModels());
+  redoStack.push(cloneModels(rowModels));
   restoreModels(previous);
 }
 
@@ -704,7 +645,7 @@ function redo(): void {
   if (!next) {
     return;
   }
-  undoStack.push(cloneModels());
+  undoStack.push(cloneModels(rowModels));
   restoreModels(next);
 }
 
@@ -842,65 +783,6 @@ pagerLast.addEventListener('click', () => goToOffset(lastOffset()));
 pageSizeInput.addEventListener('change', () => {
   api.postMessage({ type: 'page', offset: 0, pageSize: pageSizeInput.value === 'No' ? 0 : parseInt(pageSizeInput.value, 10) });
 });
-
-// One modal for every multi-line value; `editor` switches it between JSON (validated, formatted,
-// Enter-assisted) and plain text (saved verbatim).
-const valueModal = element<HTMLDivElement>('valueModal');
-const valueModalTitle = element<HTMLSpanElement>('valueModalTitle');
-const valueModalColumn = element<HTMLSpanElement>('valueModalColumn');
-const valueModalText = element<HTMLTextAreaElement>('valueModalText');
-const valueStatus = element<HTMLSpanElement>('valueStatus');
-const valueModalSave = element<HTMLButtonElement>('valueModalSave');
-const valueModalCancel = element<HTMLButtonElement>('valueModalCancel');
-const jsonFormat = element<HTMLButtonElement>('jsonFormat');
-
-let valueTarget: {
-  editor: ValueEditor;
-  model: RowModel;
-  column: ColumnMeta;
-  input: HTMLInputElement;
-  cell: HTMLTableCellElement;
-} | null = null;
-
-valueModalSave.addEventListener('click', saveValueModal);
-valueModalCancel.addEventListener('click', closeValueModal);
-jsonFormat.addEventListener('click', formatJsonModal);
-valueModalText.addEventListener('input', validateValueModal);
-valueModal.addEventListener('keydown', onValueModalKeydown);
-
-// Escape cancels, Ctrl/Cmd+Enter saves. In JSON mode a bare Enter is assisted (scaffolding);
-// every other key types literally — nothing else is intercepted.
-function onValueModalKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    closeValueModal();
-    return;
-  }
-  if (event.key !== 'Enter') {
-    return;
-  }
-  if (event.ctrlKey || event.metaKey) {
-    event.preventDefault();
-    saveValueModal();
-    return;
-  }
-  if (valueTarget?.editor === 'json' && event.target === valueModalText) {
-    event.preventDefault();
-    smartJsonEnter();
-  }
-}
-
-// Pretty-print the JSON, first tidying common slips (trailing commas) so it usually just works.
-function formatJsonModal(): void {
-  const tidied = valueModalText.value.replace(/,(\s*[}\]])/g, '$1');
-  try {
-    valueModalText.value = JSON.stringify(JSON.parse(tidied), null, 2);
-  } catch {
-    // Leave the text untouched when it can't be parsed; the status line explains why.
-  }
-  validateJsonModal();
-  valueModalText.focus();
-}
 
 window.addEventListener('message', (event: MessageEvent<ExtensionToWebview>) => {
   const message = event.data;
@@ -1090,20 +972,6 @@ function buildHead(): HTMLTableSectionElement {
   return head;
 }
 
-// ENUM/SET spell out every value, which would flood the header: keep the keyword only (the full
-// type stays in the hover title and the values in the cell dropdown).
-function compactType(type: string): string {
-  const lower = type.toLowerCase();
-  const enumLike = /^(enum|set)\(/.exec(lower);
-  return enumLike ? enumLike[1] : lower;
-}
-
-// Small link glyph → a foreign-key column; small stacked-lines glyph → an indexed column.
-const FK_SVG =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 9.4 9.4 6.6"/><path d="M7.2 4.6 8.3 3.5a2.4 2.4 0 0 1 3.4 3.4L10.6 8"/><path d="M8.8 11.4 7.7 12.5a2.4 2.4 0 0 1-3.4-3.4L5.4 8"/></svg>';
-const INDEX_SVG =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3.5 4.5h9M3.5 8h6M3.5 11.5h3.5"/></svg>';
-
 // One badge per column at most: foreign key wins over a plain index (it's the more useful signal).
 // Primary keys already show the 🔑 and are skipped here.
 function buildColumnBadge(column: ColumnMeta): HTMLSpanElement | null {
@@ -1136,19 +1004,7 @@ function buildSortButton(column: string): HTMLButtonElement {
 }
 
 // Parse a single-column `col ASC|DESC` clause so the header arrow can reflect it (null if multi-column/custom).
-function parseOrder(clause: string): { column: string; direction: 'ASC' | 'DESC' } | null {
-  const match = /^["'`[\]]*([\w$]+)["'`[\]]*\s+(ASC|DESC)$/i.exec(clause.trim());
-  if (!match) {
-    return null;
-  }
-  return { column: match[1], direction: match[2].toUpperCase() as 'ASC' | 'DESC' };
-}
-
 // Funnel toggle that opens the column's local filter popup (Excel-style value picker).
-// A funnel glyph (not a triangle, which reads as a sort control) for the local filter toggle.
-const FUNNEL_SVG =
-  '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12a.5.5 0 0 1 .4.8L10 9.2V13a.5.5 0 0 1-.7.45l-2-1A.5.5 0 0 1 7 12V9.2L1.6 3.8A.5.5 0 0 1 2 3z"/></svg>';
-
 function buildFilterButton(column: ColumnMeta): HTMLButtonElement {
   const button = document.createElement('button');
   button.className = 'filter-btn';
@@ -1161,8 +1017,6 @@ function buildFilterButton(column: ColumnMeta): HTMLButtonElement {
   });
   return button;
 }
-
-const NULL_LABEL = '<null>';
 
 // Distinct values of a column among loaded rows, with counts, checkable to narrow the view.
 function openFilterPopup(column: ColumnMeta, anchor: HTMLElement): void {
@@ -1272,19 +1126,6 @@ function openFilterPopup(column: ColumnMeta, anchor: HTMLElement): void {
   filterPop.style.top = `${rect.bottom + 2}px`;
   filterPop.hidden = false;
   search.focus();
-}
-
-// Null needs a sentinel so it survives the checkbox's string value round-trip.
-function encodeValue(value: CellValue): string {
-  return value === null ? '\0null' : `s${value}`;
-}
-
-function decodeValue(encoded: string): CellValue {
-  return encoded === '\0null' ? null : encoded.slice(1);
-}
-
-function displayValue(value: CellValue): string {
-  return value === null ? NULL_LABEL : value;
 }
 
 // Select an entire column (all rows); typing then fills every selected cell.
@@ -1580,7 +1421,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
   const input = document.createElement('input');
   // Long values (JSON, TEXT) open the multi-line modal — a single-line input would swallow their
   // newlines and Enter would just commit it.
-  const valueEditor = editable ? valueEditorFor(model, column) : null;
+  const valueEditor = editable ? valueEditorFor(column.type, model.values[column.name]) : null;
   const dateType = editable && !valueEditor ? dateInputType(column.type) : null;
   // Foreign-key columns get a searchable dropdown of referenced values (key + descriptive label).
   const fk = editable && !valueEditor && !dateType ? foreignKeyFor(column.name) : undefined;
@@ -1599,7 +1440,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
     }
   }
   input.addEventListener('input', () => {
-    model.values[column.name] = dateType ? fromDateInputValue(input, column, dateType) : readInput(input, column);
+    model.values[column.name] = dateType ? fromDateInputValue(input.value, column, dateType) : readInput(input, column);
     input.classList.toggle('null', model.values[column.name] === null);
     applyCellState(cell, model, column);
     // Multi-cell selection: mirror the lead cell into every selected cell live, so the whole
@@ -1628,7 +1469,7 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
 
   if (valueEditor) {
     input.classList.add('modal-editable');
-    input.addEventListener('dblclick', () => openValueModal(valueEditor, model, column, input, cell));
+    input.addEventListener('dblclick', () => editInModal(valueEditor, model, column, input, cell));
   } else if (editable) {
     input.addEventListener('dblclick', () => {
       if (dateType) {
@@ -1641,7 +1482,16 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
         input.readOnly = false;
         input.focus();
       } else if (fk) {
-        openFkPopup(fk, column, input);
+        // Anchor to the cell (not the padded input) so the popup lines up with the column's left edge.
+        openFkPopup(
+          input.value,
+          cell,
+          (search, onResult) => requestFkValues(fk, column, search, onResult),
+          (picked) => {
+            input.value = picked;
+            input.dispatchEvent(new Event('input'));
+          },
+        );
       } else {
         // Double-clicking a cell of a selected row edits that column in every selected row.
         bulkCells = bulkTargetsFor({ r: Number(cell.dataset.r), c: Number(cell.dataset.c) });
@@ -1706,70 +1556,6 @@ function beginInlineEdit(input: HTMLInputElement): void {
   input.setSelectionRange(end, end);
 }
 
-function isDateColumn(type: string): boolean {
-  const normalized = type.toLowerCase();
-  return normalized === 'date' || normalized.includes('timestamp') || normalized.includes('datetime');
-}
-
-function dateInputType(type: string): 'date' | 'datetime-local' | null {
-  if (!isDateColumn(type)) {
-    return null;
-  }
-  return type.toLowerCase() === 'date' ? 'date' : 'datetime-local';
-}
-
-// Raw 'YYYY-MM-DD[ HH:MM:SS]' → the value a <input type=date|datetime-local> expects.
-function toDateInputValue(value: CellValue, dateType: 'date' | 'datetime-local'): string {
-  if (value === null) {
-    return '';
-  }
-  if (dateType === 'date') {
-    return value.slice(0, 10);
-  }
-  return value.replace('T', ' ').slice(0, 19).replace(' ', 'T');
-}
-
-// Native date field value → the raw 'YYYY-MM-DD[ HH:MM:SS]' stored for the UPDATE.
-function fromDateInputValue(input: HTMLInputElement, column: ColumnMeta, dateType: 'date' | 'datetime-local'): CellValue {
-  if (input.value === '') {
-    return column.isNullable ? null : '';
-  }
-  return dateType === 'date' ? input.value : input.value.replace('T', ' ');
-}
-
-// Display a raw 'YYYY-MM-DD[ HH:MM:SS]' value using the configured locale (empty = raw ISO).
-function formatDate(value: CellValue, locale: string): string {
-  if (value === null) {
-    return '';
-  }
-  if (!locale) {
-    return value;
-  }
-  const hasTime = value.length > 10;
-  const parsed = new Date(hasTime ? value.replace(' ', 'T') : `${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return hasTime ? parsed.toLocaleString(locale) : parsed.toLocaleDateString(locale);
-}
-
-// Parses `enum('a','b','c')` (MySQL) into its allowed values, or null if not an enum.
-function enumValues(type: string): string[] | null {
-  const match = /^enum\((.*)\)$/i.exec(type.trim());
-  if (!match) {
-    return null;
-  }
-  return match[1].split(',').map((part) => part.trim().replace(/^'(.*)'$/, '$1').replace(/''/g, "'"));
-}
-
-// A value stored in a text column but shaped like JSON (object/array) deserves the JSON editor.
-function looksLikeJson(value: CellValue): boolean {
-  return value !== null && /^\s*[[{]/.test(value);
-}
-
-// Beyond this many options, the enum dropdown shows only the first N and reveals a search box.
-const ENUM_SEARCH_THRESHOLD = 10;
-
 function buildEnumCell(model: RowModel, column: ColumnMeta, options: string[]): HTMLTableCellElement {
   const cell = document.createElement('td');
   // A select-looking display that opens a custom, searchable dropdown (native <select> can't search).
@@ -1783,117 +1569,21 @@ function buildEnumCell(model: RowModel, column: ColumnMeta, options: string[]): 
   };
   setDisplay();
   display.addEventListener('click', () => {
-    openEnumPopup(model, column, options, display, () => {
+    const choices = options.map((option) => ({ label: option, value: option as CellValue }));
+    if (column.isNullable) {
+      choices.unshift({ label: 'NULL', value: null });
+    }
+    openEnumPopup(choices, model.values[column.name], display, (value) => {
+      pushUndo();
+      model.values[column.name] = value;
       setDisplay();
       applyCellState(cell, model, column);
+      refreshPending();
     });
   });
   applyCellState(cell, model, column);
   cell.appendChild(display);
   return cell;
-}
-
-// Searchable value picker for an enum cell: first N values always shown; a search box appears
-// (and scans every value) once the list is long enough to be awkward to scan.
-function openEnumPopup(
-  model: RowModel,
-  column: ColumnMeta,
-  options: string[],
-  anchor: HTMLElement,
-  onChange: () => void,
-): void {
-  const current = model.values[column.name];
-  const choices: Array<{ label: string; value: CellValue }> = options.map((option) => ({ label: option, value: option }));
-  if (column.isNullable) {
-    choices.unshift({ label: 'NULL', value: null });
-  }
-  const hasSearch = choices.length > ENUM_SEARCH_THRESHOLD;
-
-  enumPop.replaceChildren();
-  const list = document.createElement('div');
-  list.className = 'enum-pop-list';
-
-  const pick = (value: CellValue): void => {
-    pushUndo();
-    model.values[column.name] = value;
-    enumPop.hidden = true;
-    onChange();
-    refreshPending();
-  };
-
-  const renderList = (needle: string): void => {
-    list.replaceChildren();
-    const filter = needle.trim().toLowerCase();
-    const matches = filter
-      ? choices.filter((choice) => choice.label.toLowerCase().includes(filter))
-      : choices.slice(0, ENUM_SEARCH_THRESHOLD);
-    for (const choice of matches) {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'enum-pop-row';
-      row.classList.toggle('selected', choice.value === current);
-      row.classList.toggle('null', choice.value === null);
-      row.textContent = choice.label;
-      row.addEventListener('click', () => pick(choice.value));
-      list.appendChild(row);
-    }
-    // Signal that more values exist below the first N (only when not searching).
-    const hidden = choices.length - matches.length;
-    if (!filter && hidden > 0) {
-      const more = document.createElement('div');
-      more.className = 'enum-pop-more';
-      more.textContent = `+${hidden} more — type to search`;
-      list.appendChild(more);
-    }
-  };
-
-  let search: HTMLInputElement | null = null;
-  if (hasSearch) {
-    search = document.createElement('input');
-    search.type = 'search';
-    search.className = 'enum-pop-search';
-    search.placeholder = 'Search…';
-    search.addEventListener('input', () => renderList(search!.value));
-    // Enter picks the first match; ArrowDown jumps into the list.
-    search.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        list.querySelector<HTMLButtonElement>('.enum-pop-row')?.click();
-      } else if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        list.querySelector<HTMLButtonElement>('.enum-pop-row')?.focus();
-      }
-    });
-    enumPop.appendChild(search);
-  }
-  enumPop.appendChild(list);
-  renderList('');
-
-  enumAnchor = anchor;
-  const rect = anchor.getBoundingClientRect();
-  enumPop.style.minWidth = `${rect.width}px`;
-  enumPop.hidden = false;
-  positionPopupUnder(enumPop, rect);
-  if (search) {
-    search.focus();
-  }
-}
-
-// Place a floating popup directly under `rect`, measuring it so it never runs off the right edge
-// (shift left) or bottom (flip above). The popup must already be visible to be measurable.
-function positionPopupUnder(pop: HTMLElement, rect: DOMRect): void {
-  const margin = 8;
-  let left = rect.left;
-  if (left + pop.offsetWidth > window.innerWidth - margin) {
-    left = window.innerWidth - pop.offsetWidth - margin;
-  }
-  left = Math.max(margin, left);
-  let top = rect.bottom + 2;
-  if (top + pop.offsetHeight > window.innerHeight - margin) {
-    top = Math.max(margin, rect.top - pop.offsetHeight - 2);
-  }
-  pop.style.left = `${left}px`;
-  pop.style.top = `${top}px`;
 }
 
 // ---- Foreign keys: value dropdown + navigation ----
@@ -1925,90 +1615,6 @@ function resolveFkValues(requestId: number, options: FkOption[], hasMore: boolea
     resolve(options, hasMore);
     fkPending.delete(requestId);
   }
-}
-
-// Searchable foreign-key picker: each row shows the referenced key plus a descriptive label
-// (name/code/label/…). Search runs server-side; picking writes the key into the cell.
-function openFkPopup(fk: ForeignKeyMeta, column: ColumnMeta, input: HTMLInputElement): void {
-  const current = input.value;
-  fkPop.replaceChildren();
-  const search = document.createElement('input');
-  search.type = 'search';
-  search.className = 'enum-pop-search';
-  search.placeholder = 'Search…';
-  const list = document.createElement('div');
-  list.className = 'enum-pop-list';
-  fkPop.append(search, list);
-
-  const pick = (value: string): void => {
-    fkPop.hidden = true;
-    input.value = value;
-    input.dispatchEvent(new Event('input'));
-  };
-
-  const renderRows = (options: FkOption[], hasMore: boolean): void => {
-    list.replaceChildren();
-    const count = document.createElement('div');
-    count.className = 'enum-pop-more';
-    count.textContent = options.length === 0 ? 'No matching rows' : `${options.length}${hasMore ? '+' : ''} result${options.length > 1 ? 's' : ''}`;
-    list.appendChild(count);
-    for (const option of options) {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'enum-pop-row';
-      row.classList.toggle('selected', option.value === current);
-      // Same single-line rendering as the enum picker (which renders reliably): label · key.
-      row.textContent = option.label !== null ? `${option.label}   ·   ${option.value}` : option.value;
-      row.title = option.label !== null ? `${option.label} — ${option.value}` : option.value;
-      row.addEventListener('click', () => pick(option.value));
-      list.appendChild(row);
-    }
-    if (hasMore) {
-      const more = document.createElement('div');
-      more.className = 'enum-pop-more';
-      more.textContent = 'Refine your search to narrow further';
-      list.appendChild(more);
-    }
-  };
-
-  // Debounce so typing doesn't fire a query per keystroke; the latest request wins.
-  let debounce = 0;
-  let latest = 0;
-  const load = (term: string): void => {
-    const seq = (latest += 1);
-    requestFkValues(fk, column, term, (options, hasMore) => {
-      if (seq === latest) {
-        renderRows(options, hasMore);
-      }
-    });
-  };
-  search.addEventListener('input', () => {
-    window.clearTimeout(debounce);
-    debounce = window.setTimeout(() => load(search.value), 150);
-  });
-  search.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      list.querySelector<HTMLButtonElement>('.enum-pop-row')?.click();
-    } else if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      list.querySelector<HTMLButtonElement>('.enum-pop-row')?.focus();
-    }
-  });
-
-  // Anchor to the cell (not the padded input) so the popup lines up with the column's left edge.
-  fkAnchor = input.closest('td') ?? input;
-  const rect = fkAnchor.getBoundingClientRect();
-  fkPop.style.minWidth = `${rect.width}px`;
-  fkPop.hidden = false;
-  // Show a placeholder immediately so the dropdown never looks empty while the query runs.
-  const loading = document.createElement('div');
-  loading.className = 'enum-pop-more';
-  loading.textContent = 'Loading…';
-  list.appendChild(loading);
-  positionPopupUnder(fkPop, rect);
-  load('');
-  search.focus();
 }
 
 function onGridContextMenu(event: MouseEvent): void {
@@ -2081,35 +1687,11 @@ function applyColumnToWhere(column: ColumnMeta, value: CellValue): void {
   api.postMessage({ type: 'filter', value: filterInput.value });
 }
 
-// Numeric columns stay unquoted; everything else is single-quoted with quotes doubled for escaping.
-function whereLiteral(column: ColumnMeta, value: string): string {
-  if (isNumericColumn(column.type)) {
-    return value;
-  }
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function isNumericColumn(type: string): boolean {
-  return /\b(int|integer|serial|decimal|numeric|float|double|real|bit)\b/i.test(type);
-}
-
 interface NavAction {
   label: string;
   icon: string;
   run: () => void;
 }
-
-// Cell-menu glyphs: a funnel (filter), an arrow-out (jump to referenced row), stacked rows (incoming rows).
-const MENU_FILTER_SVG =
-  '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12a.5.5 0 0 1 .4.8L10 9.2V13a.5.5 0 0 1-.7.45l-2-1A.5.5 0 0 1 7 12V9.2L1.6 3.8A.5.5 0 0 1 2 3z"/></svg>';
-const MENU_GOTO_SVG =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H3.5v9h9V9"/><path d="M9.5 3.5H12.5V6.5"/><path d="M12.5 3.5 7.5 8.5"/></svg>';
-const MENU_ROWS_SVG =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>';
-const MENU_TRASH_SVG =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10"/><path d="M6.5 4.5v-1h3v1"/><path d="M4.5 4.5 5 13h6l.5-8.5"/><path d="M6.8 7v4M9.2 7v4"/></svg>';
-const MENU_RESTORE_SVG =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M3 3v3h3"/></svg>';
 
 // Forward: from an FK value → the referenced row. Reverse: from a referenced (PK) value → the rows pointing here.
 function cellNavActions(model: RowModel, column: ColumnMeta): NavAction[] {
@@ -2159,8 +1741,8 @@ function showCellMenu(x: number, y: number, actions: NavAction[]): void {
   cellMenu.hidden = false;
 }
 
-// A typed `seed` (Excel-style "type over the cell") replaces the current value in the editor.
-function openValueModal(
+// JSON / long text edit in the shared modal; saving writes the value back into this cell.
+function editInModal(
   editor: ValueEditor,
   model: RowModel,
   column: ColumnMeta,
@@ -2168,188 +1750,14 @@ function openValueModal(
   cell: HTMLTableCellElement,
   seed: string | null = null,
 ): void {
-  valueTarget = { editor, model, column, input, cell };
-  const value = model.values[column.name];
-  valueModalTitle.textContent = editor === 'json' ? 'Edit JSON' : 'Edit text';
-  valueModalColumn.textContent = `${column.name} · ${column.type}`;
-  jsonFormat.hidden = editor !== 'json';
-  valueModalText.value = seed ?? (editor === 'json' ? prettyJson(value) : (value ?? ''));
-  valueModal.hidden = false;
-  validateValueModal();
-  valueModalText.focus();
-  if (seed !== null) {
-    valueModalText.setSelectionRange(seed.length, seed.length);
-  }
-}
-
-function prettyJson(value: string | null): string {
-  if (value === null) {
-    return '';
-  }
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
-}
-
-function validateValueModal(): boolean {
-  return valueTarget?.editor === 'json' ? validateJsonModal() : validateTextModal();
-}
-
-// Live validity: colors the status and disables Save on invalid JSON (typing stays free — only
-// the Save button is gated, never the textarea).
-function validateJsonModal(): boolean {
-  const text = valueModalText.value.trim();
-  if (text === '') {
-    setValueStatus(emptyValueStatus(), 'muted');
-    valueModalSave.disabled = false;
-    return true;
-  }
-  try {
-    JSON.parse(text);
-    setValueStatus('Valid JSON', 'ok');
-    valueModalSave.disabled = false;
-    return true;
-  } catch (error) {
-    setValueStatus((error as Error).message, 'error');
-    valueModalSave.disabled = true;
-    return false;
-  }
-}
-
-// Plain text is always saveable; the status just describes what will be stored.
-function validateTextModal(): boolean {
-  const text = valueModalText.value;
-  if (text === '') {
-    setValueStatus(emptyValueStatus(), 'muted');
-  } else {
-    const lineCount = text.split('\n').length;
-    setValueStatus(`${text.length} chars · ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`, 'muted');
-  }
-  valueModalSave.disabled = false;
-  return true;
-}
-
-function emptyValueStatus(): string {
-  return valueTarget?.column.isNullable ? 'empty → NULL' : 'empty';
-}
-
-function setValueStatus(text: string, tone: 'muted' | 'ok' | 'error'): void {
-  valueStatus.textContent = text;
-  valueStatus.className = `value-status ${tone}`;
-}
-
-// The bracket enclosing `pos` ('{' object, '[' array, null at top level), ignoring string contents.
-function enclosingBracket(value: string, pos: number): '{' | '[' | null {
-  const stack: Array<'{' | '['> = [];
-  let inString = false;
-  for (let i = 0; i < pos; i += 1) {
-    const char = value[i];
-    if (inString) {
-      if (char === '\\') {
-        i += 1;
-      } else if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-    if (char === '"') {
-      inString = true;
-    } else if (char === '{' || char === '[') {
-      stack.push(char);
-    } else if (char === '}' || char === ']') {
-      stack.pop();
-    }
-  }
-  return stack.length > 0 ? stack[stack.length - 1] : null;
-}
-
-// Enter assistance: opening a { or [ drops its closer on the line below and puts the caret inside
-// (between "" for an object); otherwise a separating comma is added and, inside an object, the next
-// key is scaffolded. Only Enter is remapped — typing is never blocked.
-function smartJsonEnter(): void {
-  const value = valueModalText.value;
-  const start = valueModalText.selectionStart;
-  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-  const indent = /^[ \t]*/.exec(value.slice(lineStart, start))?.[0] ?? '';
-  const innerIndent = `${indent}  `;
-  const prev = value[start - 1];
-  const closerAfter = value[start] === '}' || value[start] === ']';
-
-  if (prev === '{' || prev === '[') {
-    const isObject = prev === '{';
-    const keyPart = isObject ? '"": ' : '';
-    // Move an existing closer to its own line, or add the matching one when it's missing.
-    const tail = closerAfter ? `\n${indent}` : `\n${indent}${isObject ? '}' : ']'}`;
-    replaceJsonSelection(`\n${innerIndent}${keyPart}${tail}`, start + 1 + innerIndent.length + (isObject ? 1 : 0));
-    return;
-  }
-
-  const lineBefore = value.slice(lineStart, start).trimEnd();
-  const needsComma = lineBefore !== '' && !',:{[('.includes(lineBefore.slice(-1));
-  const comma = needsComma ? ',' : '';
-  if (enclosingBracket(value, start) === '{') {
-    replaceJsonSelection(`${comma}\n${indent}"": `, start + comma.length + 1 + indent.length + 1);
-    return;
-  }
-  const insert = `${comma}\n${indent}`;
-  replaceJsonSelection(insert, start + insert.length);
-}
-
-function replaceJsonSelection(text: string, caret: number): void {
-  const value = valueModalText.value;
-  valueModalText.value = value.slice(0, valueModalText.selectionStart) + text + value.slice(valueModalText.selectionEnd);
-  valueModalText.selectionStart = valueModalText.selectionEnd = caret;
-  validateJsonModal();
-}
-
-function saveValueModal(): void {
-  // Never persist invalid JSON (backs up the disabled Save button).
-  if (!valueTarget || !validateValueModal()) {
-    return;
-  }
-  pushUndo();
-  const { editor, model, column, input, cell } = valueTarget;
-  const next = editor === 'json' ? jsonValueToStore(column) : textValueToStore(column);
-  model.values[column.name] = next;
-  input.value = next ?? '';
-  input.classList.toggle('null', next === null);
-  applyCellState(cell, model, column);
-  refreshPending();
-  closeValueModal();
-}
-
-// JSON is stored compact; an empty editor stores NULL when the column allows it.
-function jsonValueToStore(column: ColumnMeta): CellValue {
-  const text = valueModalText.value.trim();
-  if (text === '') {
-    return column.isNullable ? null : '';
-  }
-  return compactJson(text);
-}
-
-// Text is stored verbatim (whitespace and newlines included); empty follows the same NULL rule.
-function textValueToStore(column: ColumnMeta): CellValue {
-  const text = valueModalText.value;
-  if (text === '') {
-    return column.isNullable ? null : '';
-  }
-  return text;
-}
-
-// Valid JSON is stored compact; anything else is saved verbatim (never blocks the save).
-function compactJson(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text));
-  } catch {
-    return text;
-  }
-}
-
-function closeValueModal(): void {
-  valueModal.hidden = true;
-  valueTarget = null;
+  openValueModal(editor, column, model.values[column.name], seed, (next) => {
+    pushUndo();
+    model.values[column.name] = next;
+    input.value = next ?? '';
+    input.classList.toggle('null', next === null);
+    applyCellState(cell, model, column);
+    refreshPending();
+  });
 }
 
 function readInput(input: HTMLInputElement, column: ColumnMeta): CellValue {
@@ -2380,67 +1788,16 @@ function addRow(): void {
   refreshPending();
 }
 
-// A new row starts empty (NULL), except enums: pre-select the column's default value, or the
-// first enum value, so the cell shows a valid choice rather than NULL.
-function defaultForNewRow(column: ColumnMeta): CellValue {
-  const options = enumValues(column.type);
-  if (options && options.length > 0) {
-    return column.defaultValue !== null && options.includes(column.defaultValue) ? column.defaultValue : options[0];
-  }
-  return null;
-}
-
 function commit(): void {
-  const edits = computeEdits();
+  const edits = computeEdits(rowModels, columns, pkColumns);
   if (edits.length > 0) {
     api.postMessage({ type: 'commit', edits });
   }
 }
 
-function computeEdits(): EditDto[] {
-  const edits: EditDto[] = [];
-  for (const model of rowModels) {
-    if (model.original === null) {
-      appendInsert(edits, model);
-    } else if (model.deleted) {
-      edits.push({ op: 'delete', pk: pick(model.original, pkColumns) });
-    } else {
-      appendUpdate(edits, model, model.original);
-    }
-  }
-  return edits;
-}
-
-function appendInsert(edits: EditDto[], model: RowModel): void {
-  if (model.deleted) {
-    return;
-  }
-  const values: Row = {};
-  for (const column of columns) {
-    if (model.values[column.name] !== null) {
-      values[column.name] = model.values[column.name];
-    }
-  }
-  if (Object.keys(values).length > 0) {
-    edits.push({ op: 'insert', values });
-  }
-}
-
-function appendUpdate(edits: EditDto[], model: RowModel, original: Record<string, CellValue>): void {
-  const set: Row = {};
-  for (const column of columns) {
-    if (model.values[column.name] !== original[column.name]) {
-      set[column.name] = model.values[column.name];
-    }
-  }
-  if (Object.keys(set).length > 0) {
-    edits.push({ op: 'update', pk: pick(original, pkColumns), set });
-  }
-}
-
 function refreshPending(): void {
-  const count = computeEdits().length;
-  const dirty = hasLocalChanges();
+  const count = computeEdits(rowModels, columns, pkColumns).length;
+  const dirty = hasLocalChanges(rowModels, columns);
   commitButton.hidden = count === 0;
   revertButton.hidden = count === 0;
   pendingDrawer.hidden = count === 0;
@@ -2455,37 +1812,3 @@ function refreshPending(): void {
   redoButton.disabled = redoStack.length === 0;
 }
 
-function hasLocalChanges(): boolean {
-  return rowModels.some((model) => {
-    if (model.original === null || model.deleted) {
-      return true;
-    }
-    const original = model.original;
-    return columns.some((column) => model.values[column.name] !== original[column.name]);
-  });
-}
-
-function pick(row: Record<string, CellValue>, keys: string[]): Row {
-  const picked: Row = {};
-  for (const key of keys) {
-    picked[key] = row[key];
-  }
-  return picked;
-}
-
-function toCellRow(row: Row): Record<string, CellValue> {
-  const cells: Record<string, CellValue> = {};
-  for (const key of Object.keys(row)) {
-    const value = row[key];
-    cells[key] = value === null || value === undefined ? null : String(value);
-  }
-  return cells;
-}
-
-function element<T extends HTMLElement>(id: string): T {
-  const found = document.getElementById(id);
-  if (!found) {
-    throw new Error(`Missing element #${id}`);
-  }
-  return found as T;
-}
