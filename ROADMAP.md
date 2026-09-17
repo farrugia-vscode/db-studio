@@ -13,7 +13,7 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Edit / Remove via right-click
 - [x] Duplicate connection (config + password, unique name)
 - [x] Find table / view across schemas (fuzzy quick-pick → opens data)
-- [ ] Group / reorder connections
+- [x] Group / reorder connections (Group field in the form, Move Up / Move Down)
 
 ## Schema tree
 - [x] connection → database/schema → table → columns (PK, type, nullability)
@@ -28,7 +28,7 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Select which databases/schemas to display per connection
 - [x] Show / hide columns in the data grid (toolbar checklist)
 - [x] Search across the tree via "Find table…" (fuzzy quick-pick)
-- [ ] Refresh a single node, Copy name / Copy DDL, row-count estimate on tables
+- [x] Refresh a single node, Copy name / Copy DDL, row-count estimate on tables (`dbStudio.showRowCounts`)
 
 ## Data grid
 - [x] Editable cells, add + delete rows, Commit (UPDATE / INSERT / DELETE by PK)
@@ -55,10 +55,10 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Line-number gutter; row selection (click, drag, Shift, Ctrl) → Backspace deletes, edits apply to every selected row
 - [x] Long text (TEXT/CLOB) and JSON edited in a modal (Esc / Ctrl+Enter)
 - [x] Right-click: apply a cell value in WHERE, delete / restore selected rows
-- [ ] Keyboard navigation between cells (arrows, Tab, Shift+arrows)
-- [ ] Set NULL / set empty string explicitly (empty is coerced to NULL today)
-- [ ] Row selection honoured by copy / export / duplicate
-- [ ] Local text search across the loaded page
+- [x] Keyboard navigation between cells (arrows, Tab, Shift+arrows, Home/End, Page Up/Down; Enter/Tab step after a commit)
+- [x] Set NULL / set empty string explicitly from the context menu (selection-wide)
+- [x] Row selection honoured by copy / export / duplicate
+- [x] FIND box: text search across the loaded rows (Ctrl+F)
 
 ## SQL
 - [x] Run SQL from selection / active `.sql` file / prompt → results grid (tinted)
@@ -67,9 +67,9 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] Query history (per connection, timestamps + row counts, filter, export CSV/MD, clear)
 - [x] One result tab per `;`-separated statement; editable results when the PK is in the result (MySQL)
 - [x] SQL formatter (Alt+Shift+F), syntax highlighting, resizable editor
-- [ ] Execution time per statement, EXPLAIN in one click
-- [ ] Cancel a running query
-- [ ] Named snippets / favourites
+- [x] Execution time per statement (result footer, tab tooltip, history), Explain button (Ctrl+Shift+Enter)
+- [x] Cancel a running statement (MySQL KILL QUERY, PostgreSQL pg_cancel_backend; not SQLite)
+- [x] Named snippets, shared across the workspace (side panel: save, rename, delete, filter)
 
 ## Import / export
 - [x] Export a table / view to CSV, JSON or SQL inserts (right-click → Export Data)
@@ -86,4 +86,4 @@ each related window (grid, results).
 - [x] TypeScript + esbuild (bundled), SOLID layering
 - [x] Drivers behind segmented interfaces (ISP) + `DriverFactory` (OCP)
 - [x] Edits as Commands + `EditFactory`
-- [ ] Split `grid.ts` into modules; unit tests (`bun test`) on the pure logic
+- [x] `grid.ts` split into modules (pure logic, pickers, value modal); `bun test` on the pure logic; browser harness for both webviews
