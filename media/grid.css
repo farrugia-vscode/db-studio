@@ -27,6 +27,27 @@
   flex: 1 1 0;
 }
 
+/* Client-side search over the loaded page: narrower, with its match count inline. */
+.query-field.find {
+  flex: 0 1 260px;
+}
+
+.query-field.find input {
+  font-family: var(--font-ui);
+}
+
+.find-count {
+  flex: 0 0 auto;
+  min-width: 3ch;
+  font-size: var(--fs-sm);
+  color: var(--label-color);
+  white-space: nowrap;
+}
+
+.find-count.none {
+  color: var(--danger-text);
+}
+
 .query-label {
   flex: 0 0 auto;
   font-size: 10px;

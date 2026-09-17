@@ -421,6 +421,10 @@ function renderHtml(webview: vscode.Webview, mediaUri: vscode.Uri): string {
     <label class="query-field order"><span class="query-label">ORDER BY</span>
       <input id="orderBy" type="search" placeholder="id DESC" spellcheck="false">
     </label>
+    <label class="query-field find" title="Search the loaded rows (Ctrl+F)"><span class="query-label">FIND</span>
+      <input id="pageSearch" type="search" placeholder="in loaded rows" spellcheck="false">
+      <span id="pageSearchCount" class="find-count"></span>
+    </label>
   </div>
   <div id="notice" class="notice"></div>
   <div id="gridWrap"><table id="grid"></table></div>

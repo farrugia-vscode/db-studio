@@ -103,6 +103,10 @@ let previewTimer = 0;
 const reloadButton = element<HTMLButtonElement>('reload');
 const filterInput = element<HTMLInputElement>('filter');
 const orderByInput = element<HTMLInputElement>('orderBy');
+const pageSearchInput = element<HTMLInputElement>('pageSearch');
+const pageSearchCount = element<HTMLSpanElement>('pageSearchCount');
+// Case-insensitive needle matched against every cell of the loaded rows (client-side only).
+let pageSearch = '';
 const pagerFirst = element<HTMLButtonElement>('pagerFirst');
 const pagerPrev = element<HTMLButtonElement>('pagerPrev');
 const pagerNext = element<HTMLButtonElement>('pagerNext');
@@ -167,6 +171,18 @@ reloadButton.addEventListener('click', () => api.postMessage({ type: 'reload' })
 // The 'search' event fires on Enter and when the native clear (×) is clicked.
 filterInput.addEventListener('search', () => api.postMessage({ type: 'filter', value: filterInput.value }));
 orderByInput.addEventListener('search', () => api.postMessage({ type: 'order', orderBy: orderByInput.value }));
+pageSearchInput.addEventListener('input', () => {
+  pageSearch = pageSearchInput.value.trim().toLowerCase();
+  render();
+  renderSelection();
+});
+pageSearchInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    pageSearchInput.value = '';
+    pageSearchInput.dispatchEvent(new Event('input'));
+    pageSearchInput.blur();
+  }
+});
 exportButton.addEventListener('click', exportSelection);
 
 colMenuToggle.addEventListener('click', (event) => {
@@ -436,6 +452,12 @@ function scrollCellIntoView(cell: GridCell): void {
 
 function onGridShortcut(event: KeyboardEvent): void {
   const key = event.key.toLowerCase();
+  if (key === 'f') {
+    event.preventDefault();
+    pageSearchInput.focus();
+    pageSearchInput.select();
+    return;
+  }
   if (key === 'z' && !event.shiftKey) {
     event.preventDefault();
     undo();
@@ -1002,6 +1024,7 @@ function render(): void {
   colElements = [];
   grid.replaceChildren(buildColgroup(), buildHead(), buildBody(), buildFooter());
   autofitAll(INITIAL_MAX_WIDTH);
+  updatePageSearchCount();
 }
 
 // A full-width "add row" affordance pinned under the data, Notion/Excel style.
@@ -1472,7 +1495,19 @@ function rowPassesFilters(model: RowModel): boolean {
       return false;
     }
   }
-  return true;
+  return pageSearch === '' || renderColumns.some((column) => (model.values[column.name] ?? '').toLowerCase().includes(pageSearch));
+}
+
+// "n / total" next to the search box while a needle is set; red when nothing matches.
+function updatePageSearchCount(): void {
+  if (pageSearch === '') {
+    pageSearchCount.textContent = '';
+    pageSearchCount.className = 'find-count';
+    return;
+  }
+  const matching = rowModels.filter((model) => rowPassesFilters(model)).length;
+  pageSearchCount.textContent = `${matching} / ${rowModels.length}`;
+  pageSearchCount.className = matching === 0 ? 'find-count none' : 'find-count';
 }
 
 function buildRow(model: RowModel, rowIndex: number, lineNumber: number): HTMLTableRowElement {
