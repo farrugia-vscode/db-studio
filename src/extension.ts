@@ -44,6 +44,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dbStudio.editConnection', (node?: SchemaNode) => editConnection(node)),
     vscode.commands.registerCommand('dbStudio.removeConnection', (node?: SchemaNode) => removeConnection(node)),
     vscode.commands.registerCommand('dbStudio.refresh', () => treeProvider.refresh()),
+    vscode.commands.registerCommand('dbStudio.refreshNode', (node?: SchemaNode) => treeProvider.refresh(node)),
+    vscode.commands.registerCommand('dbStudio.copyName', (node?: SchemaNode) => copyName(node)),
+    vscode.commands.registerCommand('dbStudio.copyDdl', (node?: SchemaNode) => copyDdl(node)),
     vscode.commands.registerCommand('dbStudio.openTableData', (node?: SchemaNode) => openTableData(node)),
     vscode.commands.registerCommand('dbStudio.showTableDdl', (node?: SchemaNode) => showTableDdl(node)),
     vscode.commands.registerCommand('dbStudio.showObjectDdl', (node?: SchemaNode) => showObjectDdl(node)),
@@ -280,6 +283,33 @@ async function showObjectDdl(node?: SchemaNode): Promise<void> {
     );
     await vscode.languages.setTextDocumentLanguage(document, 'sql');
     await vscode.window.showTextDocument(document, { preview: true });
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+// The bare identifier: table/object/namespace name, or the column/index/key name for a field.
+async function copyName(node?: SchemaNode): Promise<void> {
+  if (!node) {
+    return;
+  }
+  const name = typeof node.label === 'string' ? node.label : (node.label?.label ?? '');
+  await vscode.env.clipboard.writeText(name);
+  vscode.window.setStatusBarMessage(`DB Studio: copied "${name}"`, 2000);
+}
+
+async function copyDdl(node?: SchemaNode): Promise<void> {
+  if (!node || !node.namespace || !node.table) {
+    return;
+  }
+  try {
+    const driver = await manager.getDriver(node.connectionName);
+    const ddl =
+      node.kind === 'object' && node.objectKind
+        ? await driver.getObjectDdl(node.namespace, node.objectKind, node.table)
+        : await driver.getTableDdl(node.namespace, node.table);
+    await vscode.env.clipboard.writeText(ddl);
+    vscode.window.setStatusBarMessage(`DB Studio: DDL of ${node.table} copied`, 2000);
   } catch (error) {
     reportError(error);
   }

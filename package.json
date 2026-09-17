@@ -139,6 +139,22 @@
         "title": "Select Connections…",
         "icon": "$(filter)",
         "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.refreshNode",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.copyName",
+        "title": "Copy Name",
+        "category": "DB Studio"
+      },
+      {
+        "command": "dbStudio.copyDdl",
+        "title": "Copy DDL",
+        "category": "DB Studio"
       }
     ],
     "menus": {
@@ -264,6 +280,35 @@
           "command": "dbStudio.openSqlConsole",
           "when": "view == dbStudio.explorer && viewItem == connection",
           "group": "0_new@2"
+        },
+        {
+          "command": "dbStudio.refreshNode",
+          "when": "view == dbStudio.explorer && viewItem =~ /^(connection|namespace|group|table|tablePart)$/",
+          "group": "8_refresh@1"
+        },
+        {
+          "command": "dbStudio.copyName",
+          "when": "view == dbStudio.explorer && viewItem =~ /^(namespace|table|object|field)$/",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "dbStudio.copyDdl",
+          "when": "view == dbStudio.explorer && viewItem =~ /^(table|object)$/",
+          "group": "3_copy@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "dbStudio.refreshNode",
+          "when": "false"
+        },
+        {
+          "command": "dbStudio.copyName",
+          "when": "false"
+        },
+        {
+          "command": "dbStudio.copyDdl",
+          "when": "false"
         }
       ]
     },

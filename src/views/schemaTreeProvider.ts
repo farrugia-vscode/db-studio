@@ -23,8 +23,9 @@ export class SchemaTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     private readonly context: vscode.ExtensionContext,
   ) {}
 
-  refresh(): void {
-    this.emitter.fire(undefined);
+  /** Re-query the whole tree, or just `node` and its descendants. */
+  refresh(node?: SchemaNode): void {
+    this.emitter.fire(node);
   }
 
   getTreeItem(node: SchemaNode): vscode.TreeItem {
