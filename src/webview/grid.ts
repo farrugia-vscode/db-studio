@@ -914,9 +914,16 @@ function buildHead(): HTMLTableSectionElement {
     const cell = document.createElement('th');
     // Hover reveals the column's SQL type (PHPStorm-style).
     cell.title = `${column.name}  ${column.type}`;
+    // Name over its SQL type, so the type reads at a glance without hovering.
     const label = document.createElement('span');
     label.className = 'th-label';
-    label.textContent = column.name;
+    const name = document.createElement('span');
+    name.className = 'th-name';
+    name.textContent = column.name;
+    const type = document.createElement('span');
+    type.className = 'th-type';
+    type.textContent = compactType(column.type);
+    label.append(name, type);
     // Clicking the name selects the whole column (then typing bulk-edits it).
     label.addEventListener('click', () => selectColumn(index));
     // Dragging the name reorders the column.
@@ -955,6 +962,14 @@ function buildHead(): HTMLTableSectionElement {
   });
   head.appendChild(row);
   return head;
+}
+
+// ENUM/SET spell out every value, which would flood the header: keep the keyword only (the full
+// type stays in the hover title and the values in the cell dropdown).
+function compactType(type: string): string {
+  const lower = type.toLowerCase();
+  const enumLike = /^(enum|set)\(/.exec(lower);
+  return enumLike ? enumLike[1] : lower;
 }
 
 // Small link glyph → a foreign-key column; small stacked-lines glyph → an indexed column.
@@ -1335,7 +1350,7 @@ function updateCellFont(): void {
     const style = getComputedStyle(sample);
     cellFont = style.font && style.font.trim() ? style.font : `${style.fontSize} ${style.fontFamily}`;
   }
-  const label = grid.querySelector('.th-label');
+  const label = grid.querySelector('.th-name');
   if (label) {
     const style = getComputedStyle(label);
     headerFont = style.font && style.font.trim() ? style.font : `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;

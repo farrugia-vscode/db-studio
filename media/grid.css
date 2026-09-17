@@ -223,8 +223,9 @@ td {
   padding: 0;
 }
 
+/* Two lines (name + type), so the vertical padding is tighter than a data cell's. */
 th {
-  padding: var(--cell-py) var(--cell-px);
+  padding: 7px var(--cell-px);
 }
 
 /* The header content is flex INSIDE the cell; the th itself must stay a table-cell. */
@@ -262,14 +263,32 @@ th {
 
 .th-label {
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
   cursor: pointer;
   user-select: none;
+}
+
+.th-name,
+.th-type {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.th-label:hover {
+.th-label:hover .th-name {
   color: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
+}
+
+/* The SQL type: small, muted, monospace, no letter-spacing (that is for the name only). */
+.th-type {
+  font-family: var(--font-code);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.2;
+  color: var(--label-color);
 }
 
 /* Header buttons: local-filter funnel then the 3-state sort toggle, at the right edge. */
