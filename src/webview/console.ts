@@ -7,6 +7,7 @@ import type {
   ConsoleToExtension,
   ExtensionToConsole,
   HistoryEntry,
+  Snippet,
 } from '../domain/consoleProtocol';
 import type { DriverKind } from '../domain/types';
 
@@ -36,6 +37,14 @@ const historyList = byId<HTMLUListElement>('historyList');
 const historyEmpty = byId<HTMLSpanElement>('historyEmpty');
 const historyCount = byId<HTMLSpanElement>('historyCount');
 const historyFilter = byId<HTMLInputElement>('historyFilter');
+const snippetsToggle = byId<HTMLButtonElement>('snippetsToggle');
+const snippetsPanel = byId<HTMLElement>('snippetsPanel');
+const snippetsClose = byId<HTMLButtonElement>('snippetsClose');
+const snippetsEmpty = byId<HTMLSpanElement>('snippetsEmpty');
+const snippetsCount = byId<HTMLSpanElement>('snippetsCount');
+const snippetsFilter = byId<HTMLInputElement>('snippetsFilter');
+const snippetsList = byId<HTMLUListElement>('snippetsList');
+const snippetSave = byId<HTMLButtonElement>('snippetSave');
 const editBar = byId<HTMLDivElement>('editBar');
 const editCount = byId<HTMLSpanElement>('editCount');
 const editSqlToggle = byId<HTMLButtonElement>('editSqlToggle');
@@ -89,6 +98,10 @@ formatButton.addEventListener('click', formatEditor);
 historyToggle.addEventListener('click', toggleHistory);
 historyClose.addEventListener('click', () => setHistoryOpen(false));
 historyFilter.addEventListener('input', drawHistory);
+snippetsToggle.addEventListener('click', () => setSnippetsOpen(snippetsPanel.hidden));
+snippetsClose.addEventListener('click', () => setSnippetsOpen(false));
+snippetsFilter.addEventListener('input', drawSnippets);
+snippetSave.addEventListener('click', saveSnippet);
 historyExportCsv.addEventListener('click', () => exportHistory('csv'));
 historyExportMd.addEventListener('click', () => exportHistory('markdown'));
 historyClear.addEventListener('click', () => api.postMessage({ type: 'clearHistory' }));
@@ -139,6 +152,11 @@ window.addEventListener('message', (event: MessageEvent<ExtensionToConsole>) => 
   }
   if (message.type === 'history') {
     renderHistory(message.items);
+    return;
+  }
+  if (message.type === 'snippets') {
+    snippets = message.items;
+    drawSnippets();
     return;
   }
   if (message.type === 'results') {
@@ -583,10 +601,86 @@ function toggleHistory(): void {
   setHistoryOpen(historyPanel.hidden);
 }
 
+// The two side panels share the right edge: opening one closes the other.
 function setHistoryOpen(open: boolean): void {
   historyPanel.hidden = !open;
   historyToggle.setAttribute('aria-pressed', String(open));
   historyToggle.classList.toggle('active', open);
+  if (open) {
+    setSnippetsOpen(false);
+  }
+}
+
+// ---- Snippets ----
+
+let snippets: Snippet[] = [];
+
+function setSnippetsOpen(open: boolean): void {
+  snippetsPanel.hidden = !open;
+  snippetsToggle.setAttribute('aria-pressed', String(open));
+  snippetsToggle.classList.toggle('active', open);
+  if (open) {
+    setHistoryOpen(false);
+    snippetsFilter.focus();
+  }
+}
+
+// The selection when there is one, else the whole editor.
+function saveSnippet(): void {
+  const selection = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+  const sql = (selection.trim() !== '' ? selection : editor.value).trim();
+  if (sql === '') {
+    status.textContent = 'Nothing to save: the editor is empty';
+    return;
+  }
+  api.postMessage({ type: 'saveSnippet', sql });
+}
+
+function drawSnippets(): void {
+  const needle = snippetsFilter.value.trim().toLowerCase();
+  const shown = needle
+    ? snippets.filter((snippet) => `${snippet.name}\n${snippet.sql}`.toLowerCase().includes(needle))
+    : snippets;
+  snippetsList.replaceChildren(...shown.map(buildSnippetItem));
+  snippetsEmpty.hidden = snippets.length > 0;
+  const total = snippets.length;
+  snippetsCount.textContent = total === 0 ? '' : shown.length !== total ? `(${shown.length} / ${total})` : `(${total})`;
+}
+
+function buildSnippetItem(snippet: Snippet): HTMLLIElement {
+  const item = document.createElement('li');
+  item.title = snippet.sql;
+  item.addEventListener('click', () => applyHistory(snippet.sql));
+
+  const head = document.createElement('div');
+  head.className = 'snippet-head';
+  const name = document.createElement('span');
+  name.className = 'snippet-name';
+  name.textContent = snippet.name;
+  const rename = document.createElement('button');
+  rename.className = 'snippet-action';
+  rename.title = 'Rename';
+  rename.textContent = '✎';
+  rename.addEventListener('click', (event) => {
+    event.stopPropagation();
+    api.postMessage({ type: 'renameSnippet', id: snippet.id });
+  });
+  const remove = document.createElement('button');
+  remove.className = 'snippet-action snippet-remove';
+  remove.title = 'Delete';
+  remove.textContent = '×';
+  remove.addEventListener('click', (event) => {
+    event.stopPropagation();
+    api.postMessage({ type: 'deleteSnippet', id: snippet.id });
+  });
+  head.append(name, rename, remove);
+
+  const sql = document.createElement('div');
+  sql.className = 'history-sql';
+  sql.textContent = snippet.sql;
+
+  item.append(head, sql);
+  return item;
 }
 
 function renderHistory(items: HistoryEntry[]): void {
@@ -703,11 +797,15 @@ function toHistoryMarkdown(entries: HistoryEntry[]): string {
 }
 
 // Replace the current selection (or insert at the caret) with the chosen past query.
+// Insert at the caret (replacing the selection), on its own line when the caret sits after text.
 function applyHistory(sql: string): void {
   const start = editor.selectionStart;
   const end = editor.selectionEnd;
-  editor.value = editor.value.slice(0, start) + sql + editor.value.slice(end);
-  editor.selectionStart = editor.selectionEnd = start + sql.length;
+  const before = editor.value.slice(0, start);
+  const separator = before === '' || before.endsWith('\n') ? '' : '\n';
+  const insert = `${separator}${sql}`;
+  editor.value = before + insert + editor.value.slice(end);
+  editor.selectionStart = editor.selectionEnd = start + insert.length;
   editor.focus();
   scheduleSave();
 }

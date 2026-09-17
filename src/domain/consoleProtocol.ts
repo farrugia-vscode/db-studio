@@ -83,6 +83,20 @@ export interface HistoryEntry {
   durationMs?: number;
 }
 
+/** A named, reusable statement kept per workspace (shared by every connection). */
+export interface Snippet {
+  id: string;
+  name: string;
+  sql: string;
+  createdAt: number;
+}
+
+/** The whole snippet list, sorted by name; sent on open and after every change. */
+export interface ConsoleSnippetsMessage {
+  type: 'snippets';
+  items: Snippet[];
+}
+
 /** Recently run queries for this connection, newest first. */
 export interface ConsoleHistoryMessage {
   type: 'history';
@@ -107,6 +121,7 @@ export type ExtensionToConsole =
   | ConsoleResultsMessage
   | ConsoleSchemaMessage
   | ConsoleHistoryMessage
+  | ConsoleSnippetsMessage
   | ConsoleSelectSchemaMessage
   | ConsoleUpdateResultMessage;
 
@@ -153,6 +168,23 @@ export interface ConsoleClearHistoryMessage {
   type: 'clearHistory';
 }
 
+/** Save `sql` as a snippet; the host asks for its name. */
+export interface ConsoleSaveSnippetMessage {
+  type: 'saveSnippet';
+  sql: string;
+}
+
+/** Rename a snippet; the host asks for the new name. */
+export interface ConsoleRenameSnippetMessage {
+  type: 'renameSnippet';
+  id: string;
+}
+
+export interface ConsoleDeleteSnippetMessage {
+  type: 'deleteSnippet';
+  id: string;
+}
+
 /** Write edited result cells back to their source tables. */
 export interface ConsoleUpdateCellsMessage {
   type: 'updateCells';
@@ -169,4 +201,7 @@ export type ConsoleToExtension =
   | ConsoleSchemaChangeMessage
   | ConsoleExportHistoryMessage
   | ConsoleClearHistoryMessage
+  | ConsoleSaveSnippetMessage
+  | ConsoleRenameSnippetMessage
+  | ConsoleDeleteSnippetMessage
   | ConsoleUpdateCellsMessage;

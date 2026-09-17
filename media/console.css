@@ -289,6 +289,50 @@
   background: var(--vscode-list-hoverBackground);
 }
 
+/* Snippet rows: name + hover actions above the SQL preview. */
+.snippet-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.snippet-name {
+  flex: 1 1 auto;
+  font-weight: 600;
+  font-size: var(--fs-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snippet-action {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--label-color);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.history li:hover .snippet-action {
+  opacity: 0.8;
+}
+
+.snippet-action:hover {
+  opacity: 1 !important;
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.snippet-remove:hover {
+  color: var(--danger-text);
+}
+
 .history-sql {
   font-family: var(--font-code);
   font-size: var(--fs-base);

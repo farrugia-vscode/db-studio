@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { QueryHistory } from './queryHistory';
 import { getConnectionIcon } from './connectionIcon';
+import { SnippetStore } from './snippetStore';
 import { explainStatement, isReadStatement, splitSqlStatements, statementLabel } from '../domain/sqlScript';
 import type {
   ConsoleCellEdit,
@@ -10,6 +11,7 @@ import type {
   ConsoleResultColumn,
   ConsoleToExtension,
   ExtensionToConsole,
+  Snippet,
 } from '../domain/consoleProtocol';
 import type { ColumnSource } from '../domain/types';
 
@@ -33,11 +35,15 @@ export class SqlConsoleView {
   // Schema to preselect on first open (when launched from a schema node).
   private readonly preselected = new Map<string, string>();
 
+  private readonly snippets: SnippetStore;
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly manager: ConnectionManager,
     private readonly history: QueryHistory,
-  ) {}
+  ) {
+    this.snippets = new SnippetStore(context);
+  }
 
   open(connectionName: string, namespace?: string): void {
     const existing = this.panels.get(connectionName);
@@ -94,6 +100,18 @@ export class SqlConsoleView {
       await this.cancel(connectionName, panel);
       return;
     }
+    if (message.type === 'saveSnippet') {
+      await this.saveSnippet(message.sql);
+      return;
+    }
+    if (message.type === 'renameSnippet') {
+      await this.renameSnippet(message.id);
+      return;
+    }
+    if (message.type === 'deleteSnippet') {
+      this.broadcastSnippets(await this.snippets.remove(message.id));
+      return;
+    }
     if (message.type === 'exportHistory') {
       await this.exportHistory(connectionName, message.format, message.content, message.count);
       return;
@@ -104,6 +122,41 @@ export class SqlConsoleView {
     }
     if (message.type === 'updateCells') {
       await this.updateCells(connectionName, panel, message.namespace, message.edits);
+    }
+  }
+
+  private async saveSnippet(sql: string): Promise<void> {
+    const name = await vscode.window.showInputBox({
+      prompt: 'Snippet name',
+      placeHolder: 'e.g. Orders of the day',
+      validateInput: (value) => (value.trim() === '' ? 'A name is required' : undefined),
+    });
+    if (name === undefined) {
+      return;
+    }
+    this.broadcastSnippets(await this.snippets.add(name.trim(), sql));
+  }
+
+  private async renameSnippet(id: string): Promise<void> {
+    const current = this.snippets.list().find((snippet) => snippet.id === id);
+    if (!current) {
+      return;
+    }
+    const name = await vscode.window.showInputBox({
+      prompt: 'New snippet name',
+      value: current.name,
+      validateInput: (value) => (value.trim() === '' ? 'A name is required' : undefined),
+    });
+    if (name === undefined) {
+      return;
+    }
+    this.broadcastSnippets(await this.snippets.rename(id, name.trim()));
+  }
+
+  // Snippets are workspace-wide: every open console shows the same list.
+  private broadcastSnippets(items: Snippet[]): void {
+    for (const panel of this.panels.values()) {
+      this.post(panel, { type: 'snippets', items });
     }
   }
 
@@ -150,6 +203,7 @@ export class SqlConsoleView {
     const driver = this.manager.getConnection(connectionName)?.driver ?? 'mysql';
     this.post(panel, { type: 'init', sql, namespaces, namespace, driver });
     this.post(panel, { type: 'history', items: this.history.list(connectionName) });
+    this.post(panel, { type: 'snippets', items: this.snippets.list() });
     void this.sendSchema(connectionName, panel, namespace);
   }
 
@@ -387,6 +441,7 @@ export class SqlConsoleView {
     <button id="explain" title="Show the execution plan (Ctrl+Shift+Enter)">Explain</button>
     <button id="format" title="Format SQL (Alt+Shift+F)">Format</button>
     <button id="historyToggle" title="Recent queries" aria-pressed="false">History</button>
+    <button id="snippetsToggle" title="Saved snippets" aria-pressed="false">Snippets</button>
     <span class="hint">Ctrl+Enter — run selection, or the whole script</span>
     <span id="syntaxHint" class="syntax-hint" hidden></span>
     <span id="status"></span>
@@ -426,6 +481,17 @@ export class SqlConsoleView {
         <button id="historyClear" class="history-clear" title="Clear all history">${TRASH_ICON}Empty</button>
       </div>
       <ul id="historyList"></ul>
+    </aside>
+    <aside id="snippetsPanel" class="history snippets" hidden aria-label="Snippets">
+      <div class="history-head">
+        <span>Snippets<span id="snippetsCount" class="history-count"></span><span id="snippetsEmpty" class="history-empty" hidden>— none yet</span></span>
+        <button id="snippetsClose" class="history-close" title="Close snippets" aria-label="Close snippets">×</button>
+      </div>
+      <div class="history-tools">
+        <input id="snippetsFilter" type="search" placeholder="Filter snippets…" spellcheck="false" aria-label="Filter snippets">
+        <button id="snippetSave" class="primary" title="Save the selection (or the whole editor) as a snippet">+ Save</button>
+      </div>
+      <ul id="snippetsList"></ul>
     </aside>
   </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>

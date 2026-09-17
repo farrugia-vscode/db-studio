@@ -54,7 +54,7 @@ code --install-extension db-studio-<version>.vsix --force
 Reload the window after an update (quit and relaunch when commands or menus changed).
 
 Dev loop: `bun run watch` (rebuild on change), `bun run check` (type-check), `bun test` (unit tests).
-Grid in a plain browser: `bun scripts/grid-harness.ts` then serve the folder and open `.harness/grid.html`
+Grid in a plain browser: `bun scripts/webview-harness.ts` then serve the folder and open `.harness/grid.html` or `.harness/console.html`
 (`window.load(window.SAMPLE)` feeds it sample rows, `window.posted` collects what it sends).
 
 ## Usage
