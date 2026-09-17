@@ -125,6 +125,8 @@ let selecting = false;
 // Ctrl/Cmd+click to toggle rows. Backspace deletes them; editing a cell in one of them edits them all.
 let selectedRows = new Set<number>();
 let rowAnchor: number | null = null;
+// The moving end of a row range (anchor stays put while Shift/drag/arrows extend from it).
+let rowFocus: number | null = null;
 let rowSelecting = false;
 // Rows already selected when a Ctrl+drag started, so the drag adds to them instead of replacing them.
 let rowSelectionBase: Set<number> | null = null;
@@ -259,6 +261,7 @@ function onGutterMouseDown(event: MouseEvent, r: number): void {
     selectedRows = new Set([r]);
     rowAnchor = r;
   }
+  rowFocus = r;
   rowSelecting = true;
   renderSelection();
 }
@@ -274,6 +277,7 @@ function rowRange(from: number, to: number): Set<number> {
 function clearRowSelection(): void {
   selectedRows = new Set();
   rowAnchor = null;
+  rowFocus = null;
 }
 
 function onGridMouseMove(event: MouseEvent): void {
@@ -286,6 +290,7 @@ function onGridMouseMove(event: MouseEvent): void {
     // Dragging from the gutter sweeps a range (over the numbers or across the cells); with Ctrl it
     // is added to what was already selected.
     selectedRows = new Set([...(rowSelectionBase ?? []), ...rowRange(rowAnchor, r)]);
+    rowFocus = r;
     renderSelection();
     return;
   }
@@ -307,6 +312,11 @@ function onGridKeydown(event: KeyboardEvent): void {
     if (editing) {
       return; // editing a cell — let the input handle its own shortcuts (native undo included)
     }
+    // Ctrl+Home / Ctrl+End jump to the first / last row.
+    if (selRect() && moveCellSelection(event)) {
+      event.preventDefault();
+      return;
+    }
     onGridShortcut(event);
     return;
   }
@@ -324,13 +334,22 @@ function onGridKeydown(event: KeyboardEvent): void {
     renderSelection();
     return;
   }
-  if (!selRect()) {
-    return;
-  }
   // Duplicate the selected row(s) as pending inserts (VS Code's Shift+Alt+↓/↑ "copy line").
   if (event.altKey && event.shiftKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
     event.preventDefault();
     duplicateSelectedRows(event.key === 'ArrowUp');
+    return;
+  }
+  if (selectedRows.size > 0 && !selRect() && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    event.preventDefault();
+    moveRowSelection(event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);
+    return;
+  }
+  if (!selRect()) {
+    return;
+  }
+  if (moveCellSelection(event)) {
+    event.preventDefault();
     return;
   }
   // Typing over a selection edits the lead cell; a rectangular selection fills every cell on commit.
@@ -344,6 +363,72 @@ function onGridKeydown(event: KeyboardEvent): void {
     event.preventDefault();
     beginSelectionEdit(event.key);
   }
+}
+
+// Arrows move the lead cell (Shift extends the rectangle), Tab/Shift+Tab step sideways, Home/End
+// jump to the first/last column, Page Up/Down by a screenful. Returns false for any other key.
+function moveCellSelection(event: KeyboardEvent): boolean {
+  const lead = selFocus ?? selAnchor;
+  if (!lead) {
+    return false;
+  }
+  const lastRow = rowModels.length - 1;
+  const lastCol = renderColumns.length - 1;
+  const page = Math.max(1, Math.floor(gridScrollHeight() / ROW_HEIGHT_ESTIMATE) - 1);
+  const targets: Record<string, GridCell | undefined> = {
+    ArrowUp: { r: lead.r - 1, c: lead.c },
+    ArrowDown: { r: lead.r + 1, c: lead.c },
+    ArrowLeft: { r: lead.r, c: lead.c - 1 },
+    ArrowRight: { r: lead.r, c: lead.c + 1 },
+    Tab: { r: lead.r, c: lead.c + (event.shiftKey ? -1 : 1) },
+    Home: { r: event.ctrlKey ? 0 : lead.r, c: 0 },
+    End: { r: event.ctrlKey ? lastRow : lead.r, c: lastCol },
+    PageUp: { r: lead.r - page, c: lead.c },
+    PageDown: { r: lead.r + page, c: lead.c },
+  };
+  const target = targets[event.key];
+  if (!target) {
+    return false;
+  }
+  const next = { r: Math.min(lastRow, Math.max(0, target.r)), c: Math.min(lastCol, Math.max(0, target.c)) };
+  // Shift extends from the anchor (never for Tab, which always moves a single cell).
+  if (event.shiftKey && event.key !== 'Tab' && selAnchor) {
+    selFocus = next;
+  } else {
+    selAnchor = next;
+    selFocus = next;
+  }
+  clearRowSelection();
+  renderSelection();
+  scrollCellIntoView(next);
+  return true;
+}
+
+// Up/Down walk the row selection (single row); Shift moves the range's focus end from the anchor.
+function moveRowSelection(step: number, extend: boolean): void {
+  const from = rowFocus ?? rowAnchor ?? 0;
+  const next = Math.min(rowModels.length - 1, Math.max(0, from + step));
+  if (extend && rowAnchor !== null) {
+    selectedRows = rowRange(rowAnchor, next);
+  } else {
+    selectedRows = new Set([next]);
+    rowAnchor = next;
+  }
+  rowFocus = next;
+  renderSelection();
+  scrollCellIntoView({ r: next, c: 0 });
+}
+
+const ROW_HEIGHT_ESTIMATE = 36;
+
+function gridScrollHeight(): number {
+  return grid.parentElement?.clientHeight ?? window.innerHeight;
+}
+
+function scrollCellIntoView(cell: GridCell): void {
+  grid
+    .querySelector(`td[data-r="${cell.r}"][data-c="${cell.c}"]`)
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function onGridShortcut(event: KeyboardEvent): void {
@@ -1499,8 +1584,11 @@ function buildCell(model: RowModel, column: ColumnMeta): HTMLTableCellElement {
       }
     });
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        event.stopPropagation(); // the grid-level handler would step the selection a second time
         input.blur();
+        stepSelectionAfterCommit(event.key === 'Enter' ? { r: 1, c: 0 } : { r: 0, c: event.shiftKey ? -1 : 1 });
       } else if (event.key === 'Escape') {
         bulkCells = null; // cancel any pending bulk fill
         model.values[column.name] = value;
@@ -1545,6 +1633,22 @@ function maybeAddNavButton(cell: HTMLTableCellElement, model: RowModel, column: 
     }
   });
   cell.appendChild(button);
+}
+
+// After committing an inline edit, Enter moves the selection down and Tab sideways.
+function stepSelectionAfterCommit(step: GridCell): void {
+  const lead = selFocus ?? selAnchor;
+  if (!lead) {
+    return;
+  }
+  const next = {
+    r: Math.min(rowModels.length - 1, Math.max(0, lead.r + step.r)),
+    c: Math.min(renderColumns.length - 1, Math.max(0, lead.c + step.c)),
+  };
+  selAnchor = next;
+  selFocus = next;
+  renderSelection();
+  scrollCellIntoView(next);
 }
 
 function beginInlineEdit(input: HTMLInputElement): void {
