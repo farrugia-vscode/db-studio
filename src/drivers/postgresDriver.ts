@@ -358,7 +358,7 @@ export class PostgresDriver implements DatabaseDriver {
       lines.push(`  CONSTRAINT ${this.quoteIdentifier(index.name)} UNIQUE (${cols})`);
     }
     for (const fk of activeForeignKeys(design.foreignKeys)) {
-      lines.push(`  ${this.foreignKeyDef(fk)}`);
+      lines.push(`  ${this.foreignKeyDef(namespace, fk)}`);
     }
     const statements = [`CREATE TABLE ${ref} (\n${lines.join(',\n')}\n);`];
     for (const index of indexes.filter((entry) => !entry.isUnique)) {
@@ -445,16 +445,18 @@ export class PostgresDriver implements DatabaseDriver {
           statements.push(`ALTER TABLE ${ref} DROP CONSTRAINT IF EXISTS ${this.quoteIdentifier(fk.originalName)};`);
         }
       } else if (fk.originalName === null && isCompleteForeignKey(fk)) {
-        statements.push(`ALTER TABLE ${ref} ADD ${this.foreignKeyDef(fk)};`);
+        statements.push(`ALTER TABLE ${ref} ADD ${this.foreignKeyDef(namespace, fk)};`);
       }
     }
     return statements;
   }
 
-  private foreignKeyDef(fk: ForeignKeyDraft): string {
+  // The referenced table is picked from the same schema. An unqualified name would be looked up
+  // in search_path instead, which is usually only "public".
+  private foreignKeyDef(namespace: string, fk: ForeignKeyDraft): string {
     const cols = fk.columns.map((column) => this.quoteIdentifier(column)).join(', ');
     const refCols = fk.refColumns.map((column) => this.quoteIdentifier(column)).join(', ');
-    let def = `CONSTRAINT ${this.quoteIdentifier(fk.name)} FOREIGN KEY (${cols}) REFERENCES ${this.quoteIdentifier(fk.refTable)} (${refCols})`;
+    let def = `CONSTRAINT ${this.quoteIdentifier(fk.name)} FOREIGN KEY (${cols}) REFERENCES ${this.buildTableRef(namespace, fk.refTable)} (${refCols})`;
     if (fk.onDelete.trim() !== '') {
       def += ` ON DELETE ${fk.onDelete}`;
     }
