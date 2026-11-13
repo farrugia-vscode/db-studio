@@ -208,7 +208,8 @@ export class PostgresDriver implements DatabaseDriver {
     if (kind === 'view') {
       const result = await this.client!.query<{ ddl: string }>(
         'SELECT pg_get_viewdef($1::regclass, true) AS ddl',
-        [`${namespace}.${name}`],
+        // regclass reads the text like SQL: unquoted names are folded to lower case.
+        [this.buildTableRef(namespace, name)],
       );
       return `CREATE OR REPLACE VIEW ${this.buildTableRef(namespace, name)} AS\n${result.rows[0]?.ddl ?? ''}`;
     }
