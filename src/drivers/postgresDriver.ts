@@ -419,7 +419,7 @@ export class PostgresDriver implements DatabaseDriver {
     const originalPk = original.columns.filter((column) => column.isPrimaryKey).map((column) => column.name).sort().join(',');
     const editedPk = edited.columns.filter((column) => !column.drop && column.isPrimaryKey).map((column) => column.name);
     if (originalPk !== [...editedPk].sort().join(',')) {
-      statements.push(`ALTER TABLE ${ref} DROP CONSTRAINT IF EXISTS ${this.quoteIdentifier(`${table}_pkey`)};`);
+      statements.push(this.buildDropPrimaryKey(ref));
       if (editedPk.length > 0) {
         statements.push(`ALTER TABLE ${ref} ADD PRIMARY KEY (${editedPk.map((name) => this.quoteIdentifier(name)).join(', ')});`);
       }
@@ -454,6 +454,13 @@ export class PostgresDriver implements DatabaseDriver {
       }
     }
     return statements;
+  }
+
+  // The primary key name is read on the server: it is "<table>_pkey" only by default,
+  // and a renamed table keeps its old key name.
+  private buildDropPrimaryKey(ref: string): string {
+    const refLiteral = `'${ref.replace(/'/g, "''")}'`;
+    return `DO $$ BEGIN EXECUTE coalesce((SELECT format('ALTER TABLE %s DROP CONSTRAINT %I', conrelid::regclass, conname) FROM pg_constraint WHERE conrelid = ${refLiteral}::regclass AND contype = 'p'), 'SELECT 1'); END $$;`;
   }
 
   // The referenced table is picked from the same schema. An unqualified name would be looked up
