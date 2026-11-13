@@ -881,12 +881,14 @@ function fillDown(): void {
   const anchor = selAnchor;
   const focus = selFocus;
   for (let c = rect.c1; c <= rect.c2; c += 1) {
-    const name = renderColumns[c].name;
-    const topValue = rowModels[rect.r1]?.values[name] ?? null;
+    const column = renderColumns[c];
+    const topValue = rowModels[rect.r1]?.values[column.name] ?? null;
     for (let r = rect.r1 + 1; r <= rect.r2; r += 1) {
       const model = rowModels[r];
-      if (model) {
-        model.values[name] = topValue;
+      // Same rule as typing: a key the database generates stays empty on a new row.
+      // A row hidden by a local filter is not seen, so it is not changed.
+      if (model && rowPassesFilters(model) && isCellEditable(model, column)) {
+        model.values[column.name] = topValue;
       }
     }
   }
@@ -907,15 +909,17 @@ async function pasteSelection(): Promise<void> {
   pushUndo();
   const anchor = selAnchor;
   const focus = selFocus;
+  // Lines land on the rows the user sees: a row hidden by a local filter is skipped.
+  const visibleRows = rowModels.slice(rect.r1).filter((model) => rowPassesFilters(model));
   lines.forEach((line, rowOffset) => {
-    const model = rowModels[rect.r1 + rowOffset];
+    const model = visibleRows[rowOffset];
     if (!model) {
       return;
     }
     line.split('\t').forEach((cellValue, colOffset) => {
       const column = renderColumns[rect.c1 + colOffset];
-      if (column) {
-        model.values[column.name] = cellValue === '' && column.isNullable ? null : cellValue;
+      if (column && isCellEditable(model, column)) {
+        setCellValue(model, column, cellValue);
       }
     });
   });
