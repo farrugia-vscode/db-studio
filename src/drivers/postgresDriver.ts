@@ -70,8 +70,9 @@ export class PostgresDriver implements DatabaseDriver {
   async listTables(namespace: string): Promise<string[]> {
     await this.connect();
     const result = await this.client!.query<{ name: string }>(
+      // information_schema.tables also lists views; the tree shows them in their own folder.
       `SELECT table_name AS name FROM information_schema.tables
-       WHERE table_schema = $1 ORDER BY table_name`,
+       WHERE table_schema = $1 AND table_type <> 'VIEW' ORDER BY table_name`,
       [namespace],
     );
     return result.rows.map((row) => row.name);

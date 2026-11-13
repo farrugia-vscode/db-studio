@@ -402,7 +402,9 @@ export class SqlConsoleView {
       if (!namespace) {
         return;
       }
-      const tableNames = await driver.listTables(namespace);
+      // Views are queried like tables, so they complete like tables.
+      const [baseTableNames, viewNames] = await Promise.all([driver.listTables(namespace), driver.listViews(namespace)]);
+      const tableNames = [...baseTableNames, ...viewNames];
       // Cap the eager column fetch so a huge schema never stalls the console open.
       const capped = tableNames.slice(0, MAX_AUTOCOMPLETE_TABLES);
       const tables = await Promise.all(

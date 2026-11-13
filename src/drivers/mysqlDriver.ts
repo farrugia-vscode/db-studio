@@ -64,7 +64,9 @@ export class MysqlDriver implements DatabaseDriver {
 
   async listTables(namespace: string): Promise<string[]> {
     const rows = await this.select(
-      'SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name',
+      // information_schema.tables also lists views; the tree shows them in their own folder.
+      `SELECT table_name AS name FROM information_schema.tables
+       WHERE table_schema = ? AND table_type <> 'VIEW' ORDER BY table_name`,
       [namespace],
     );
     return rows.map((row) => String(row.name));
