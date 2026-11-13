@@ -61,7 +61,7 @@ Shared tracker. Updated every turn. `[x]` done · `[ ]` planned.
 - [x] FIND box: text search across the loaded rows (Ctrl+F)
 
 ## SQL
-- [x] Run SQL from selection / active `.sql` file / prompt → results grid (tinted)
+- [x] ~~Run SQL from selection / active `.sql` file / prompt → results grid~~ - dropped, the SQL console covers it
 - [x] Full SQL console window (per-connection, auto-saved editor, Ctrl+Enter run)
 - [x] Schema-aware autocompletion (tables, columns, keywords; alias-aware `.` columns)
 - [x] Query history (per connection, timestamps + row counts, filter, export CSV/MD, clear)
