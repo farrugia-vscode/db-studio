@@ -43,6 +43,11 @@ export class PostgresDriver implements DatabaseDriver {
       database: this.config.database || 'postgres',
     });
     await this.client.connect();
+    if (this.config.isReadOnly) {
+      // The server refuses every write, also the ones the console filter lets through
+      // (EXPLAIN ANALYZE DELETE, WITH d AS (DELETE ...) SELECT).
+      await this.client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
+    }
     const pidResult = await this.client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
     this.backendPid = pidResult.rows[0]?.pid ?? null;
   }

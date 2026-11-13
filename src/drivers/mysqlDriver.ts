@@ -45,6 +45,11 @@ export class MysqlDriver implements DatabaseDriver {
       // Return DATE/DATETIME/TIMESTAMP as raw strings (no Date object, no timezone shift).
       dateStrings: true,
     });
+    if (this.config.isReadOnly) {
+      // The server refuses every write, also the ones the console filter lets through
+      // (EXPLAIN ANALYZE DELETE runs the delete).
+      await this.connection.query('SET SESSION TRANSACTION READ ONLY');
+    }
   }
 
   async close(): Promise<void> {
