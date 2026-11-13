@@ -1,5 +1,7 @@
+import type { GridDataMessage } from '../src/domain/gridProtocol';
+
 // Sample payload for the grid harness: a small "products" table with a FK, an enum, JSON and text.
-window.SAMPLE = {
+export const GRID_SAMPLE: Omit<GridDataMessage, 'type'> = {
   namespace: 'shop',
   table: 'products',
   columns: [
@@ -13,7 +15,7 @@ window.SAMPLE = {
     { name: 'created_at', type: 'datetime', isNullable: false, isPrimaryKey: false, isAutoIncrement: false, defaultValue: 'CURRENT_TIMESTAMP' },
   ],
   pkColumns: ['id'],
-  foreignKeys: [{ name: 'fk_cat', columns: ['category_id'], refTable: 'categories', refColumns: ['id'] }],
+  foreignKeys: [{ name: 'fk_cat', columns: ['category_id'], refTable: 'categories', refColumns: ['id'], onDelete: '' }],
   incomingForeignKeys: [],
   indexedColumns: ['id', 'name', 'category_id'],
   readOnly: false,

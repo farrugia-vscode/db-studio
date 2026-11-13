@@ -7,7 +7,8 @@
  *   bun run build && bun scripts/webview-harness.ts && python3 -m http.server 8765
  *   → http://127.0.0.1:8765/.harness/grid.html  and  .harness/console.html
  */
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { GRID_SAMPLE } from './grid-sample';
 
 const BACKTICK = String.fromCharCode(96);
 
@@ -93,4 +94,4 @@ for (const view of VIEWS) {
   writeFileSync(`.harness/${view.name}.html`, render(view));
   console.log(`wrote .harness/${view.name}.html`);
 }
-copyFileSync('scripts/grid-sample.js', '.harness/sample.js');
+writeFileSync('.harness/sample.js', `window.SAMPLE = ${JSON.stringify(GRID_SAMPLE, null, 2)};\n`);
