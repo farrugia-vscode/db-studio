@@ -28,7 +28,7 @@ const TRASH_ICON =
 
 /**
  * A per-connection SQL console: a full editor whose content is auto-saved to
- * global state, running statements against the connection and showing results.
+ * workspace state, running statements against the connection and showing results.
  */
 export class SqlConsoleView {
   private readonly panels = new Map<string, vscode.WebviewPanel>();

@@ -260,7 +260,6 @@ async function removeConnection(node?: SchemaNode): Promise<void> {
   treeProvider.refresh();
 }
 
-// "Run SQL Query" opens the full console; from a schema node it preselects that schema.
 async function openTableData(node?: SchemaNode): Promise<void> {
   // Tables and views both open in the data grid (a view lands read-only: no primary key).
   const isTable = node?.kind === 'table';
