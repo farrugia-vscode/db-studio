@@ -19,8 +19,11 @@ import type {
   TableSchema,
 } from '../domain/types';
 
-/** Internal bookkeeping tables SQLite creates on its own — never shown in the tree. */
-const INTERNAL_TABLE_PREFIX = 'sqlite_';
+/**
+ * Internal bookkeeping tables SQLite creates on its own (`sqlite_*`): never shown in the tree.
+ * A LIKE pattern: `_` alone matches any character, so it is escaped.
+ */
+const INTERNAL_NAME_PATTERN = 'sqlite\\_%';
 
 interface TableInfoRow {
   name: string;
@@ -329,8 +332,8 @@ export class SqliteDriver implements DatabaseDriver {
   private async listMasterNames(namespace: string, type: string): Promise<string[]> {
     const rows = await this.select(
       `SELECT name FROM ${this.quoteIdentifier(namespace)}.sqlite_master
-       WHERE type = ? AND name NOT LIKE '${INTERNAL_TABLE_PREFIX}%' ORDER BY name`,
-      [type],
+       WHERE type = ? AND name NOT LIKE ? ESCAPE '\\' ORDER BY name`,
+      [type, INTERNAL_NAME_PATTERN],
     );
     return rows.map((row) => String(row.name));
   }
