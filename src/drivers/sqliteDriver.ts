@@ -210,6 +210,10 @@ export class SqliteDriver implements DatabaseDriver {
     return '?';
   }
 
+  castToText(expression: string): string {
+    return `CAST(${expression} AS TEXT)`;
+  }
+
   buildCreateNamespace(name: string): string {
     throw new Error(`SQLite has no databases to create ("${name}"): one connection is one file.`);
   }

@@ -7,6 +7,7 @@ import { FK_LIMIT, pickDisplayColumn } from '../domain/fkDisplayColumn';
 import type { ColumnMeta, Row } from '../domain/types';
 import type { CopyFormat, CopyMessage, ExportMessage, ExtensionToWebview, WebviewToExtension } from '../domain/gridProtocol';
 import type { EditDto } from '../domain/edits/edit';
+import type { SqlDialect } from '../domain/driver';
 import { csvCell, sqlLiteral } from '../domain/exportFormat';
 
 export interface TableTarget {
@@ -187,7 +188,7 @@ class GridSession {
       const selectLabel = labelCol ? `, ${labelCol} AS label` : '';
       // Search matches the key or the label; limit + 1 so we can tell the user more exist.
       const term = (search ?? '').trim();
-      const where = this.fkSearchClause(col, labelCol, term);
+      const where = this.fkSearchClause(driver, col, labelCol, term);
       const limit = FK_LIMIT;
       // Order by the key column: it is indexed (usually the PK), so this stays fast even on large
       // referenced tables — ordering by the label could full-scan/sort and hang the dropdown.
@@ -207,14 +208,15 @@ class GridSession {
     }
   }
 
-  private fkSearchClause(keyCol: string, labelCol: string | null, term: string): string {
+  private fkSearchClause(dialect: SqlDialect, keyCol: string, labelCol: string | null, term: string): string {
     if (term === '') {
       return '';
     }
     const like = sqlLiteral(`%${term}%`);
-    const conditions = [`${keyCol} LIKE ${like}`];
+    // The key is often an integer, and the label can be a number or a date too.
+    const conditions = [`${dialect.castToText(keyCol)} LIKE ${like}`];
     if (labelCol) {
-      conditions.push(`${labelCol} LIKE ${like}`);
+      conditions.push(`${dialect.castToText(labelCol)} LIKE ${like}`);
     }
     return ` AND (${conditions.join(' OR ')})`;
   }

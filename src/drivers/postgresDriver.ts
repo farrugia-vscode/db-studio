@@ -486,6 +486,11 @@ export class PostgresDriver implements DatabaseDriver {
     return `$${index}`;
   }
 
+  castToText(expression: string): string {
+    // PostgreSQL has no LIKE on a number or a date: "operator does not exist: integer ~~ unknown".
+    return `CAST(${expression} AS TEXT)`;
+  }
+
   async query(sql: string, params?: unknown[]): Promise<QueryResult> {
     await this.connect();
     const result = await this.client!.query(sql, params);

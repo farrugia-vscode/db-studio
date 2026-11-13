@@ -342,6 +342,10 @@ export class MysqlDriver implements DatabaseDriver {
     return '?';
   }
 
+  castToText(expression: string): string {
+    return `CAST(${expression} AS CHAR)`;
+  }
+
   async query(sql: string, params?: unknown[]): Promise<QueryResult> {
     await this.connect();
     const [result, fields] = await this.connection!.query(sql, params);

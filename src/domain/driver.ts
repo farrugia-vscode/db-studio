@@ -68,6 +68,8 @@ export interface SqlDialect {
   buildTableRef(namespace: string, table: string): string;
   /** Positional placeholder for parameter `index` (1-based): `?` or `$index`. */
   placeholder(index: number): string;
+  /** `expression` read as text, so LIKE can search a number or a date. */
+  castToText(expression: string): string;
 }
 
 /** Generates DDL for creating databases/schemas and creating/altering tables (dialect-specific). */
